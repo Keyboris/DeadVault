@@ -49,7 +49,7 @@ public class UpdateWillService {
         String userWalletAddress = user.getWalletAddress();
 
         // 2. Load current contract — must exist
-        Contract oldContract = contractRepo.findByUserId(userId)
+        Contract oldContract = contractRepo.findByUserIdAndStatus(userId, "ACTIVE")
             .orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
                 "No vault found — use POST /api/will first"

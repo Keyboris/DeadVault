@@ -45,7 +45,7 @@ public class VaultBalanceService {
     }
 
     public VaultBalanceResponse getVaultBalance(UUID userId, List<String> tokenAddresses) {
-        Contract contract = contractRepository.findByUserId(userId)
+        Contract contract = contractRepository.findByUserIdAndStatus(userId, "ACTIVE")
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "No vault found — submit a will first"

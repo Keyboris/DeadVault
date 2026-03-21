@@ -53,7 +53,7 @@ public class WillService {
         String userWalletAddress = user.getWalletAddress();
 
         // 1b. POST /api/will is create-only. If a vault already exists, clients must use PUT /api/will.
-        if (contractRepo.findByUserId(userId).isPresent()) {
+        if (contractRepo.findByUserIdAndStatus(userId, "ACTIVE").isPresent()) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "Vault already exists for this owner — use PUT /api/will to update"
