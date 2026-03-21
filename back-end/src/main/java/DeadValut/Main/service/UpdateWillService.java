@@ -8,8 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,10 +48,14 @@ public class UpdateWillService {
             .orElseThrow(() -> new RuntimeException("User not found"));
         String userWalletAddress = user.getWalletAddress();
 
-        // 2. Load current contract — must exist
-        Contract oldContract = contractRepo.findByUserId(userId)
-            .orElseThrow(() -> new IllegalStateException(
-                "No vault found — submit a will first (POST /api/will)"));
+        // 2. BUG-1 FIX: After V10 a user can have multiple contract rows
+        //    (e.g. one REVOKED + one ACTIVE). The old findByUserId() returned
+        //    Optional<Contract> but now throws IncorrectResultSizeDataAccessException
+        //    when more than one row exists. We explicitly request the ACTIVE vault.
+        Contract oldContract = contractRepo
+                .findByUserIdAndStatus(userId, "ACTIVE")
+                .orElseThrow(() -> new IllegalStateException(
+                        "No ACTIVE vault found — submit a will first (POST /api/will)"));
 
         // 3. Guard: refuse if vault is already triggered or mid-trigger
         if ("TRIGGERED".equals(oldContract.getStatus())

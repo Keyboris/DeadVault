@@ -44,7 +44,7 @@ async function main() {
       "Authorization": `Bearer ${token}`,
     },
     body: JSON.stringify({
-      willText: "Give 60% of my funds to my wife Alice (0x1111111111111111111111111111111111111111) and 40% to my son Bob (0x2222222222222222222222222222222222222222)",
+      willText: "give give 0x2a6b81578258B6539B760b8f1a7d4d26d985370d 100% after 20 days",
     }),
   });
 
