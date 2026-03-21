@@ -1,8 +1,8 @@
 const { ethers } = require("ethers");
 
 // From your existing sign.js
-const WALLET_ADDRESS = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-const PRIVATE_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+const WALLET_ADDRESS = "0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199";
+const PRIVATE_KEY = "0xdf57089febbacf7ba0bc227dafbffa9fc08a93fdc68e1e42411a14efcf23656e";
 const BASE_URL = "http://localhost:8080";
 
 async function main() {

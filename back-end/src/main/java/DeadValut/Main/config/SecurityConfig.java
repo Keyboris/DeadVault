@@ -89,7 +89,7 @@ public class SecurityConfig {
                 // - POST /api/check-in
                 // - GET  /api/check-in/status
                 // - GET  /api/vault/balance
-                // - GET  /api/contracts 
+                // - GET  /api/contracts
                 .anyRequest().authenticated()
             )
 

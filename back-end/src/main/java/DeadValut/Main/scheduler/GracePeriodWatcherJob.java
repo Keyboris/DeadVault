@@ -43,17 +43,29 @@ public class GracePeriodWatcherJob implements Job {
         configRepo.findExpiredGracePeriods(Instant.now()).forEach(config -> {
             var userId = config.getUserId();
 
-            // Optimistic lock — prevents duplicate trigger if job fires twice on restart
+            // Optimistic lock — transitions the user's ACTIVE vault to TRIGGERING.
+            // Returns 0 if no ACTIVE vault exists (already triggering or triggered).
             int locked = contractRepo.setStatusIfActive(userId);
             if (locked == 0) {
-                log.warn("Skipping user {} — already triggering or triggered", userId);
+                log.warn("Skipping user {} — no ACTIVE vault found (already triggering or triggered)", userId);
                 return;
             }
 
             try {
-                Contract contract = contractRepo.findByUserId(userId).orElseThrow();
+                // BUG-1 FIX: after V10 a user can have multiple contract rows
+                // (e.g. one REVOKED + one now-TRIGGERING). The old findByUserId()
+                // would throw IncorrectResultSizeDataAccessException. We now load
+                // the specific row we just transitioned to TRIGGERING.
+                Contract contract = contractRepo
+                        .findByUserIdAndStatus(userId, "TRIGGERING")
+                        .orElseThrow(() -> new IllegalStateException(
+                                "TRIGGERING contract not found for user " + userId
+                                + " immediately after lock — possible race condition"));
+
                 String txHash = dispatch(contract);
 
+                // BUG-3 FIX: setTriggered now only flips the TRIGGERING row,
+                // leaving any REVOKED rows from previous wills untouched.
                 contractRepo.setTriggered(userId, txHash, Instant.now());
                 config.setStatus("TRIGGERED");
                 configRepo.save(config);
@@ -66,10 +78,12 @@ public class GracePeriodWatcherJob implements Job {
                 // For TIME_LOCKED vaults the trigger() call will revert if the time-lock
                 // has not yet elapsed. The exception rolls the status back to ACTIVE so the
                 // job retries on the next 15-minute cycle without any manual intervention.
+                String vaultType = contractRepo
+                        .findByUserIdAndStatus(userId, "TRIGGERING")
+                        .map(Contract::getVaultType)
+                        .orElse("UNKNOWN");
                 log.error("Trigger attempt for user {} (type={}) failed: {} — will retry",
-                    userId, contractRepo.findByUserId(userId)
-                        .map(Contract::getVaultType).orElse("UNKNOWN"),
-                    e.getMessage());
+                    userId, vaultType, e.getMessage());
                 contractRepo.setStatusIfTriggering(userId, "ACTIVE");
             }
         });
@@ -95,7 +109,7 @@ public class GracePeriodWatcherJob implements Job {
                     .findByConfigIdOrderByIndex(contract.getBeneficiaryConfigId())
                     .stream()
                     .filter(b -> "CONDITIONAL_SURVIVAL".equals(b.getCondition()))
-                    .map(b -> b.getIndex())    // 0-based position in the original beneficiary list
+                    .map(b -> b.getIndex())
                     .toList();
 
                 yield deploymentService.triggerConditionalVault(

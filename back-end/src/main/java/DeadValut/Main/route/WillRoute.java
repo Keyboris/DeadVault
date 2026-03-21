@@ -30,7 +30,7 @@ public class WillRoute {
      * Runs the full pipeline: LangChain4j intent extraction → DMSVault deployment on Base.
      * Returns the deployed vault address and extracted beneficiary list.
      *
-     * Request body (sent by frontend):
+     * Request body:
      * {
      *   "willText": "Give 70% to my wife Alice (0xABC...) and 30% to my son Jack (0xDEF...)"
      * }
