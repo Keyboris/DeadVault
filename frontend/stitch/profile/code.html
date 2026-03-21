@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-fixed": "#dde1ff",
+              "on-surface-variant": "#434657",
+              "on-primary-fixed-variant": "#474747",
+              "on-tertiary-fixed": "#1a1c1c",
+              "secondary-container": "#0448ff",
+              "surface-container-highest": "#e2e2e2",
+              "error-container": "#ffdad6",
+              "surface-variant": "#e2e2e2",
+              "outline": "#747688",
+              "tertiary-fixed": "#e2e2e2",
+              "tertiary-fixed-dim": "#c6c6c7",
+              "surface-container-high": "#e8e8e8",
+              "secondary-fixed-dim": "#b9c3ff",
+              "primary": "#484848",
+              "on-tertiary-fixed-variant": "#454747",
+              "on-secondary-fixed": "#001257",
+              "on-secondary-fixed-variant": "#0033c0",
+              "on-error-container": "#93000a",
+              "on-tertiary": "#ffffff",
+              "surface-bright": "#f9f9f9",
+              "surface": "#f9f9f9",
+              "surface-tint": "#5e5e5e",
+              "error": "#ba1a1a",
+              "background": "#f9f9f9",
+              "on-primary-container": "#dbdbdb",
+              "on-background": "#1b1b1b",
+              "inverse-surface": "#303030",
+              "surface-container-low": "#f3f3f3",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary-container": "#d6daff",
+              "tertiary-container": "#5f6061",
+              "on-primary-fixed": "#1b1b1b",
+              "surface-container": "#eeeeee",
+              "primary-fixed-dim": "#c6c6c6",
+              "tertiary": "#474949",
+              "outline-variant": "#c4c5da",
+              "on-surface": "#1b1b1b",
+              "on-error": "#ffffff",
+              "on-secondary": "#ffffff",
+              "primary-container": "#606060",
+              "surface-dim": "#dadada",
+              "secondary": "#0035c6",
+              "inverse-primary": "#c6c6c6",
+              "inverse-on-surface": "#f1f1f1",
+              "primary-fixed": "#e2e2e2",
+              "on-primary": "#ffffff",
+              "on-tertiary-container": "#dbdbdb"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Manrope"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Manrope', sans-serif;
+            background-color: #f9f9f9;
+        }
+        .headline-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col pb-32">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-8 py-6 bg-neutral-50 dark:bg-neutral-950 top-0 sticky z-40">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-blue-600 dark:text-blue-500" data-icon="lock">lock</span>
+<span class="text-xl font-bold tracking-tighter text-neutral-900 dark:text-neutral-50 font-['Space_Grotesk']">DeadVault</span>
+</div>
+<button class="text-neutral-500 dark:text-neutral-400 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+</header>
+<main class="px-8 pt-12 flex-grow">
+<!-- Hero Header -->
+<section class="mb-20">
+<h1 class="font-headline text-[3.5rem] leading-[0.9] font-bold tracking-tighter text-on-surface uppercase mb-4">
+                IDENTITY &amp; CONTROL
+            </h1>
+<p class="font-body text-on-surface-variant text-lg max-w-[280px] leading-snug">
+                Your existence, cryptographically secured and ready for transition.
+            </p>
+</section>
+<!-- Wallet Address Section -->
+<section class="mb-16">
+<div class="bg-surface-container-low rounded-xl p-8 flex flex-col gap-4">
+<span class="font-label text-xs font-semibold uppercase tracking-widest text-on-surface-variant">Connected Wallet</span>
+<div class="flex items-center justify-between">
+<span class="font-headline text-xl font-medium tracking-tight">0x8F22...E491</span>
+<button class="bg-primary text-on-primary rounded-full px-4 py-2 text-sm font-medium hover:opacity-90 transition-all">
+                        Change
+                    </button>
+</div>
+</div>
+</section>
+<!-- Contract Settings (Bento-style Minimalist) -->
+<section class="mb-16">
+<h2 class="font-headline text-2xl font-bold tracking-tight mb-8">CONTRACT</h2>
+<div class="grid grid-cols-1 gap-6">
+<!-- Vault Status -->
+<div class="bg-secondary-container rounded-xl p-8 text-on-secondary">
+<div class="flex justify-between items-start mb-12">
+<span class="font-label text-xs font-semibold uppercase tracking-widest opacity-80">Vault Status</span>
+<span class="material-symbols-outlined" data-icon="verified" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-4xl font-headline font-bold">ACTIVE</span>
+<span class="text-sm opacity-70">Heartbeat monitoring engaged</span>
+</div>
+</div>
+<!-- Toggles / Settings -->
+<div class="space-y-4">
+<div class="flex items-center justify-between p-6 bg-surface-container-lowest rounded-xl">
+<div class="flex flex-col">
+<span class="font-headline font-medium">Auto-Trigger</span>
+<span class="text-xs text-on-surface-variant">Execute on heartbeat failure</span>
+</div>
+<div class="w-12 h-6 bg-secondary-container rounded-full relative">
+<div class="absolute right-1 top-1 w-4 h-4 bg-on-secondary rounded-full"></div>
+</div>
+</div>
+<div class="flex items-center justify-between p-6 bg-surface-container-lowest rounded-xl opacity-60">
+<div class="flex flex-col">
+<span class="font-headline font-medium">Privacy Shield</span>
+<span class="text-xs text-on-surface-variant">Obfuscate recipient addresses</span>
+</div>
+<div class="w-12 h-6 bg-surface-container-highest rounded-full relative">
+<div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Verification Settings -->
+<section class="mb-12">
+<h2 class="font-headline text-2xl font-bold tracking-tight mb-8">VERIFICATION</h2>
+<div class="space-y-6">
+<div class="flex items-center gap-6 border-l-2 border-secondary-container pl-6 py-2">
+<div class="bg-surface-container-highest rounded-full p-3 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="fingerprint">fingerprint</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline font-semibold">Biometric Auth</span>
+<span class="text-sm text-on-surface-variant">Linked to hardware enclave</span>
+</div>
+<span class="ml-auto material-symbols-outlined text-secondary" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="flex items-center gap-6 border-l-2 border-surface-container-highest pl-6 py-2">
+<div class="bg-surface-container-highest rounded-full p-3 flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="mail">mail</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline font-semibold">Backup Email</span>
+<span class="text-sm text-on-surface-variant">Not configured</span>
+</div>
+<button class="ml-auto text-secondary text-sm font-bold uppercase tracking-wider">Add</button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center gap-8 px-6 py-2 bg-neutral-50/80 dark:bg-neutral-900/80 backdrop-blur-xl w-[auto] min-w-[280px] rounded-full shadow-[0_40px_60px_-15px_rgba(0,0,0,0.06)]">
+<!-- Dashboard -->
+<a class="flex items-center justify-center text-neutral-500 dark:text-neutral-400 p-4 hover:text-blue-500 dark:hover:text-blue-300 transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+</a>
+<!-- Notifications -->
+<a class="flex items-center justify-center text-neutral-500 dark:text-neutral-400 p-4 hover:text-blue-500 dark:hover:text-blue-300 transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</a>
+<!-- Person (Active) -->
+<a class="flex items-center justify-center bg-blue-600 text-white rounded-full p-4 active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+</a>
+</nav>
+</body></html>
