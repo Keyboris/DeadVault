@@ -73,11 +73,13 @@ public class UpdateWillService {
         }
         VaultDeploymentParams newParams = vaultTypeRouter.route(extraction);
 
-        // 5. Revoke the old vault on-chain (irreversible)
+        // 5. Revoke the old vault on-chain (irreversible) and clear factory mapping
         String revokeTxHash;
         try {
             revokeTxHash = contractDeploymentService.revokeVault(oldContractAddress);
             log.info("Old vault {} revoked — tx: {}", oldContractAddress, revokeTxHash);
+            contractDeploymentService.clearFactoryMapping(userWalletAddress);
+            log.info("Factory mapping cleared for {}", userWalletAddress);
         } catch (Exception e) {
             throw new RuntimeException("Failed to revoke old vault: " + e.getMessage(), e);
         }

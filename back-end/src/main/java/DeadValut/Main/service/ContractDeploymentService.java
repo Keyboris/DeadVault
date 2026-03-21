@@ -201,14 +201,30 @@ public class ContractDeploymentService {
     }
 
     /**
-     * Calls revoke() on the vault.
+     * Calls revokeAsAuthority() on the vault — callable by the hot wallet (triggerAuthority).
+     * revoke() is onlyOwner (user's wallet), so the backend must use revokeAsAuthority().
      */
     public String revokeVault(String contractAddress) throws Exception {
         Web3j web3j = Web3j.build(new HttpService(rpcUrl));
         Credentials creds = Credentials.create(privateKey);
-        String data = FunctionEncoder.encode(new Function("revoke", List.of(), List.of()));
+        String data = FunctionEncoder.encode(new Function("revokeAsAuthority", List.of(), List.of()));
         TransactionReceipt receipt = sendTransaction(web3j, creds, contractAddress, data);
         return receipt.getTransactionHash();
+    }
+
+    /**
+     * Calls clearVault(owner) on the factory — removes the owner→vault mapping
+     * so a new vault can be deployed for the same owner.
+     */
+    public void clearFactoryMapping(String ownerAddress) throws Exception {
+        Web3j web3j = Web3j.build(new HttpService(rpcUrl));
+        Credentials creds = Credentials.create(privateKey);
+        String data = FunctionEncoder.encode(new Function(
+            "clearVault",
+            List.of(new Address(ownerAddress)),
+            List.of()
+        ));
+        sendTransaction(web3j, creds, factoryAddress, data);
     }
 
     /**

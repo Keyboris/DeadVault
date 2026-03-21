@@ -71,6 +71,12 @@ contract DMSFactory {
         return _register(owner, address(vault), TYPE_CONDITIONAL);
     }
 
+    function clearVault(address owner) external {
+        require(msg.sender == triggerAuthority, "not authority");
+        require(vaults[owner] != address(0), "no vault to clear");
+        delete vaults[owner];
+    }
+
     function getVault(address owner) external view returns (address) {
         return vaults[owner];
     }

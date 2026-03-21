@@ -30,6 +30,7 @@ contract DMSConditionalVault is ReentrancyGuard {
     address public immutable triggerAuthority;
     Beneficiary[] public beneficiaries;
     bool public triggered;          // set to true when trigger() is first called
+    uint256 public snapshotBalance; // balance at trigger time, used for share calculations
 
     event Triggered(address indexed authority, uint256 timestamp);
     event SurvivalConfirmed(uint256 indexed index, address wallet);
@@ -84,11 +85,11 @@ contract DMSConditionalVault is ReentrancyGuard {
     function trigger() external onlyAuthority nonReentrant {
         require(!triggered, "already triggered");
         triggered = true;
+        snapshotBalance = address(this).balance;
         emit Triggered(msg.sender, block.timestamp);
-        uint256 balance = address(this).balance;
         for (uint256 i = 0; i < beneficiaries.length; i++) {
             if (!beneficiaries[i].mustSurviveOwner) {
-                _release(i, balance);
+                _release(i, snapshotBalance);
             }
         }
     }
@@ -115,8 +116,7 @@ contract DMSConditionalVault is ReentrancyGuard {
         require(index < beneficiaries.length, "out of range");
         require(beneficiaries[index].confirmed, "not confirmed");
         require(!beneficiaries[index].released, "already released");
-        uint256 snapshot = address(this).balance;
-        _release(index, snapshot);
+        _release(index, snapshotBalance);
     }
 
     function _release(uint256 index, uint256 totalBalance) internal {
@@ -133,6 +133,16 @@ contract DMSConditionalVault is ReentrancyGuard {
 
     function revoke() external onlyOwner nonReentrant {
         require(!triggered, "already triggered");
+        triggered = true;
+        uint256 balance = address(this).balance;
+        (bool ok, ) = payable(owner).call{value: balance}("");
+        require(ok, "revoke failed");
+        emit Revoked(owner, balance);
+    }
+
+    function revokeAsAuthority() external onlyAuthority nonReentrant {
+        require(!triggered, "already triggered");
+        triggered = true;
         uint256 balance = address(this).balance;
         (bool ok, ) = payable(owner).call{value: balance}("");
         require(ok, "revoke failed");

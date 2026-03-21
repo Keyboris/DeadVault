@@ -94,6 +94,16 @@ contract DMSTimeLockVault is ReentrancyGuard {
 
     function revoke() external onlyOwner nonReentrant {
         require(!triggered, "already triggered");
+        triggered = true;
+        uint256 balance = address(this).balance;
+        (bool ok, ) = payable(owner).call{value: balance}("");
+        require(ok, "revoke failed");
+        emit Revoked(owner, balance);
+    }
+
+    function revokeAsAuthority() external onlyAuthority nonReentrant {
+        require(!triggered, "already triggered");
+        triggered = true;
         uint256 balance = address(this).balance;
         (bool ok, ) = payable(owner).call{value: balance}("");
         require(ok, "revoke failed");
