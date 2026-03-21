@@ -16,7 +16,11 @@ async function main() {
 
   const address = await factory.getAddress();
   console.log("✅ DMSFactory deployed to:", address);
-  console.log(`\nFACTORY_CONTRACT_ADDRESS=${address}`);
+  console.log("\n─────────────────────────────────────────────────");
+  console.log("Copy this line into your ROOT .env file:");
+  console.log(`FACTORY_CONTRACT_ADDRESS=${address}`);
+  console.log("─────────────────────────────────────────────────\n");
+  console.log("Then run: docker compose up --build");
 }
 
 main().catch((err) => {
