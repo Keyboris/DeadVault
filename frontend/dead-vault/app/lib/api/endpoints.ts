@@ -2,10 +2,12 @@ import { apiFetch } from "./client";
 import type {
   CheckInResponse,
   CheckInStatusResponse,
+  ContractSummaryResponse,
   NonceResponse,
   SmartContractRequest,
   SmartContractResponse,
   TokenResponse,
+  UpdateWillResponse,
   VerifyRequest,
   WillRequest,
   WillResponse,
@@ -28,6 +30,17 @@ export function submitWill(payload: WillRequest): Promise<WillResponse> {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function updateWill(payload: WillRequest): Promise<UpdateWillResponse> {
+  return apiFetch<UpdateWillResponse>("/api/will", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getContracts(): Promise<ContractSummaryResponse[]> {
+  return apiFetch<ContractSummaryResponse[]>("/api/contracts");
 }
 
 export function checkIn(): Promise<CheckInResponse> {

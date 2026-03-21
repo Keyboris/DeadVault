@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { IconType } from "react-icons";
 import type { VaultContract } from "./authStorage";
-import { checkIn, getCheckInStatus, submitWill as submitWillRequest } from "@/app/lib/api/endpoints";
+import { checkIn, getCheckInStatus, getContracts as getContractsRequest, submitWill as submitWillRequest, updateWill as updateWillRequest } from "@/app/lib/api/endpoints";
+import { ApiClientError } from "@/app/lib/api/client";
 import { DMS_TOKEN_STORAGE_KEY } from "@/app/lib/api/config";
+import type { ContractSummaryResponse } from "@/app/lib/api/types";
 import {
   FaArrowUpRightFromSquare,
   FaAt,
@@ -160,18 +162,12 @@ const desktopEvents: EventItem[] = [
 
 export function DeadVaultApp({
   initialWalletAddress = null,
-  contracts,
   onWalletAddressChange,
-  onCreateContract,
-  onDeleteContract,
   onDeleteAccount,
   onLogout,
 }: {
   initialWalletAddress?: string | null;
-  contracts: VaultContract[];
   onWalletAddressChange?: (walletAddress: string | null) => void;
-  onCreateContract: (title: string, content: string) => void;
-  onDeleteContract: (id: string) => void;
   onDeleteAccount: () => void;
   onLogout?: () => void;
 }) {
@@ -191,6 +187,9 @@ export function DeadVaultApp({
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [willError, setWillError] = useState("");
   const [isSubmittingWill, setIsSubmittingWill] = useState(false);
+  const [contracts, setContracts] = useState<VaultContract[]>([]);
+  const [isLoadingContracts, setIsLoadingContracts] = useState(false);
+  const [contractsError, setContractsError] = useState("");
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [statusError, setStatusError] = useState("");
   const [statusText, setStatusText] = useState("UNKNOWN");
@@ -200,6 +199,43 @@ export function DeadVaultApp({
   const pathname = usePathname();
   const router = useRouter();
   const countdownText = formatCountdown(nextDueAt, clockTick);
+
+  const mapContractSummaryToVaultContract = (contract: ContractSummaryResponse): VaultContract => {
+    const primaryLabel = contract.beneficiaries[0]?.label ?? "No beneficiary labels";
+    const title = `${contract.vaultType} • ${shortAddress(contract.contractAddress)}`;
+    const content = `Status: ${contract.status}\nPrimary beneficiary: ${primaryLabel}\nContract: ${contract.contractAddress}\nTx: ${contract.deploymentTxHash}`;
+    return {
+      id: contract.id,
+      title,
+      content,
+      createdAt: contract.deployedAt,
+      updatedAt: contract.deployedAt,
+    };
+  };
+
+  const refreshContracts = useCallback(async () => {
+    const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
+    if (!token) {
+      setContracts([]);
+      setContractsError("Please sign in to load contracts.");
+      setIsLoadingContracts(false);
+      return;
+    }
+
+    setIsLoadingContracts(true);
+    try {
+      const response = await getContractsRequest();
+      const mapped = response.map(mapContractSummaryToVaultContract);
+      setContracts(mapped);
+      setContractsError("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Contract list is temporarily unavailable.";
+      setContractsError(message);
+      setContracts([]);
+    } finally {
+      setIsLoadingContracts(false);
+    }
+  }, []);
 
   const refreshCheckInStatus = async () => {
     const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
@@ -274,11 +310,6 @@ export function DeadVaultApp({
       return;
     }
 
-    if (editingContractId) {
-      setWillError("Will update endpoint is not available yet. Create a new will instead.");
-      return;
-    }
-
     const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
     if (!token) {
       setWillError("Please sign in before creating a will.");
@@ -287,11 +318,18 @@ export function DeadVaultApp({
 
     setIsSubmittingWill(true);
     try {
-      const response = await submitWillRequest({ willText: trimmedContent });
-      const details = `${trimmedContent}\n\nContract: ${response.contractAddress}\nTemplate: ${response.templateType}\nTx: ${response.deploymentTxHash}`;
-      onCreateContract(trimmedTitle, details);
+      if (editingContractId) {
+        await updateWillRequest({ willText: trimmedContent });
+      } else {
+        await submitWillRequest({ willText: trimmedContent });
+      }
+      await refreshContracts();
       resetWillForm();
     } catch (error) {
+      if (editingContractId && error instanceof ApiClientError && (error.status === 404 || error.status === 405)) {
+        setWillError("Will update is not enabled on this backend yet. Create a new will or enable PUT /api/will.");
+        return;
+      }
       const message = error instanceof Error ? error.message : "Will submission failed. Please try again.";
       setWillError(message);
     } finally {
@@ -302,8 +340,12 @@ export function DeadVaultApp({
   const editContract = (contract: VaultContract) => {
     setEditingContractId(contract.id);
     setWillTitle(contract.title);
-    setWillContent(contract.content);
+    setWillContent("");
     setWillError("");
+  };
+
+  const handleDeleteContract = () => {
+    setWillError("Contract deletion is not available in the current API.");
   };
 
   const validateBaseNetwork = (chainId: string | null) => {
@@ -494,6 +536,10 @@ export function DeadVaultApp({
     return () => clearInterval(poll);
   }, []);
 
+  useEffect(() => {
+    void refreshContracts();
+  }, [refreshContracts]);
+
   return (
     <div className="dv-root">
       <header className="dv-topbar">
@@ -542,8 +588,10 @@ export function DeadVaultApp({
               onWillContentChange={setWillContent}
               onSubmitWill={submitWill}
               onEditContract={editContract}
-              onDeleteContract={onDeleteContract}
+              onDeleteContract={handleDeleteContract}
               onCancelEdit={resetWillForm}
+              contractsError={contractsError}
+              isLoadingContracts={isLoadingContracts}
             />
           ) : (
             <MobileDashboard
@@ -563,8 +611,10 @@ export function DeadVaultApp({
               onWillContentChange={setWillContent}
               onSubmitWill={submitWill}
               onEditContract={editContract}
-              onDeleteContract={onDeleteContract}
+              onDeleteContract={handleDeleteContract}
               onCancelEdit={resetWillForm}
+              contractsError={contractsError}
+              isLoadingContracts={isLoadingContracts}
             />
           )
         ) : null}
@@ -689,8 +739,10 @@ type DashboardProps = {
   onWillContentChange: (value: string) => void;
   onSubmitWill: () => void;
   onEditContract: (contract: VaultContract) => void;
-  onDeleteContract: (id: string) => void;
+  onDeleteContract: () => void;
   onCancelEdit: () => void;
+  contractsError: string;
+  isLoadingContracts: boolean;
 };
 
 function MobileDashboard({
@@ -712,6 +764,8 @@ function MobileDashboard({
   onEditContract,
   onDeleteContract,
   onCancelEdit,
+  contractsError,
+  isLoadingContracts,
 }: DashboardProps) {
   return (
     <section className="dv-mobile-stack dv-dashboard-screen">
@@ -774,6 +828,8 @@ function MobileDashboard({
         onEditContract={onEditContract}
         onDeleteContract={onDeleteContract}
         onCancelEdit={onCancelEdit}
+        contractsError={contractsError}
+        isLoadingContracts={isLoadingContracts}
       />
     </section>
   );
@@ -798,6 +854,8 @@ function DesktopDashboard({
   onEditContract,
   onDeleteContract,
   onCancelEdit,
+  contractsError,
+  isLoadingContracts,
 }: DashboardProps) {
   return (
     <section className="dv-desktop-grid dv-dashboard-screen">
@@ -868,6 +926,8 @@ function DesktopDashboard({
           onEditContract={onEditContract}
           onDeleteContract={onDeleteContract}
           onCancelEdit={onCancelEdit}
+          contractsError={contractsError}
+          isLoadingContracts={isLoadingContracts}
         />
       </div>
     </section>
@@ -885,8 +945,10 @@ type WillSectionProps = {
   onWillContentChange: (value: string) => void;
   onSubmitWill: () => void;
   onEditContract: (contract: VaultContract) => void;
-  onDeleteContract: (id: string) => void;
+  onDeleteContract: () => void;
   onCancelEdit: () => void;
+  contractsError: string;
+  isLoadingContracts: boolean;
 };
 
 function WillSection({
@@ -902,6 +964,8 @@ function WillSection({
   onEditContract,
   onDeleteContract,
   onCancelEdit,
+  contractsError,
+  isLoadingContracts,
 }: WillSectionProps) {
   return (
     <section className="dv-profile-card">
@@ -940,7 +1004,11 @@ function WillSection({
 
       <h3 className="dv-created-contracts-title">CREATED CONTRACTS</h3>
       <div className="dv-contract-list">
-        {contracts.length === 0 ? (
+        {isLoadingContracts ? (
+          <p className="dv-subcopy">Loading contracts...</p>
+        ) : contractsError ? (
+          <p className="dv-inline-error">{contractsError}</p>
+        ) : contracts.length === 0 ? (
           <p className="dv-subcopy">No contracts yet. Create your first will above.</p>
         ) : (
           contracts.map((contract) => (
@@ -952,7 +1020,7 @@ function WillSection({
               </div>
               <div className="dv-contract-item-actions">
                 <button type="button" onClick={() => onEditContract(contract)}>Edit</button>
-                <button type="button" className="is-danger" onClick={() => onDeleteContract(contract.id)}>Delete</button>
+                <button type="button" className="is-danger" onClick={onDeleteContract}>Unavailable</button>
               </div>
             </article>
           ))

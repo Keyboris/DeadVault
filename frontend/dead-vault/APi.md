@@ -9,7 +9,7 @@
 ## Table of Contents
 
 1. [Authentication](#1-authentication)
-   - [GET /api/auth/nonce](#11-get-apiaauthnonce)
+   - [GET /api/auth/nonce](#11-get-apiauthnonce)
    - [POST /api/auth/verify](#12-post-apiauthverify)
 2. [Will (Vault Setup)](#2-will-vault-setup)
    - [POST /api/will](#21-post-apiwill)
@@ -19,11 +19,13 @@
 4. [Vault](#4-vault)
    - [PUT /api/will](#41-put-apiwill)
    - [GET /api/vault/balance](#42-get-apivaultbalance)
-5. [Health](#5-health)
-   - [GET /actuator/health](#41-get-actuatorhealth)
-5. [Error Responses](#5-error-responses)
-6. [End-to-End Flow](#6-end-to-end-flow)
-7. [Type Reference](#7-type-reference)
+5. [Contracts](#5-contracts)
+   - [GET /api/contracts](#51-get-apicontracts)
+6. [Health](#6-health)
+   - [GET /actuator/health](#61-get-actuatorhealth)
+7. [Error Responses](#7-error-responses)
+8. [End-to-End Flow](#8-end-to-end-flow)
+9. [Type Reference](#9-type-reference)
 
 ---
 
@@ -146,8 +148,6 @@ localStorage.setItem('dms_token', token)
 4. Persists the config and initialises the 30-day check-in timer
 5. Returns the deployed vault address
 
-This endpoint is called **once per user** after first sign-in. Attempting to call it again for a user who already has a deployed vault will fail at the factory contract level (`vault already exists for this owner`).
-
 #### Request Body
 
 ```json
@@ -202,7 +202,7 @@ This endpoint is called **once per user** after first sign-in. Attempting to cal
 | `templateType`      | `string`              | `EQUAL_SPLIT` \| `PERCENTAGE_SPLIT` \| `TIME_LOCKED` \| `CONDITIONAL_SURVIVAL` |
 | `beneficiaries`     | `Beneficiary[]`       | Resolved beneficiary list — see table below                                 |
 | `contractAddress`   | `string`              | Deployed vault address on Base — show to user, link to Basescan             |
-| `deploymentTxHash`  | `string`              | Deployment transaction hash — link to `https://sepolia.basescan.org/tx/...` |
+| `deploymentTxHash`  | `string`              | Deployment transaction hash                                                 |
 
 #### `Beneficiary` object
 
@@ -242,11 +242,9 @@ const response = await fetch('/api/will', {
   body: JSON.stringify({ willText }),
 }).then(r => r.json())
 
-// Show deployed vault
 console.log('Vault deployed at:', response.contractAddress)
 console.log('Basescan:', `https://sepolia.basescan.org/address/${response.contractAddress}`)
 
-// Display resolved beneficiaries for confirmation UI
 response.beneficiaries.forEach(b => {
   console.log(`${b.name}: ${b.basisPoints / 100}% → ${b.walletAddress}`)
 })
@@ -263,8 +261,6 @@ response.beneficiaries.forEach(b => {
 🔒 **Auth required**
 
 **Purpose**: Records a "I'm alive" check-in for the authenticated user. Resets the countdown timer to `now + intervalDays` (default: 30 days). This is the main action the user performs on a regular basis — if they miss it for more than `intervalDays + gracePeriodDays` (default: 37 days total), their vault is automatically triggered.
-
-**Auth required**: Yes
 
 #### Request Body
 
@@ -300,7 +296,6 @@ const checkIn = await fetch('/api/check-in', {
   headers: { 'Authorization': `Bearer ${token}` },
 }).then(r => r.json())
 
-// Update countdown display
 setNextDueAt(new Date(checkIn.nextDueAt))
 ```
 
@@ -310,7 +305,7 @@ setNextDueAt(new Date(checkIn.nextDueAt))
 
 🔒 **Auth required**
 
-**Purpose**: Returns the current check-in status for the authenticated user. Used to populate the dashboard countdown timer and determine urgency styling.
+**Purpose**: Returns the full check-in status for the authenticated user. The response includes all fields needed to render a precise real-time countdown clock client-side — no WebSocket required. Poll this endpoint every 60 seconds; the clock ticks via `setInterval` on the frontend.
 
 #### Request Body
 
@@ -320,17 +315,26 @@ None.
 
 ```json
 {
-  "nextDueAt": "2026-04-20T12:00:00Z",
-  "daysRemaining": 29,
-  "status": "ACTIVE"
+  "lastCheckInAt":    "2026-03-21T10:00:00Z",
+  "nextDueAt":        "2026-04-20T10:00:00Z",
+  "secondsRemaining": 2591940,
+  "intervalDays":     30,
+  "gracePeriodDays":  7,
+  "status":           "ACTIVE"
 }
 ```
 
-| Field            | Type              | Description                                                                     |
-|------------------|-------------------|---------------------------------------------------------------------------------|
-| `nextDueAt`      | `string` (ISO 8601) | UTC timestamp of the next required check-in                                   |
-| `daysRemaining`  | `number`          | Days until the deadline (can be negative if overdue)                            |
-| `status`         | `string`          | `"ACTIVE"` · `"GRACE"` · `"TRIGGERED"` · `"REVOKED"` — see status table below |
+| Field              | Type              | Description                                                                                      |
+|--------------------|-------------------|--------------------------------------------------------------------------------------------------|
+| `lastCheckInAt`    | `string` (ISO 8601) | UTC timestamp when the current interval started — use as the clock's start anchor              |
+| `nextDueAt`        | `string` (ISO 8601) | UTC timestamp when the interval expires — the countdown target                                 |
+| `secondsRemaining` | `number`          | Precise seconds until `nextDueAt`. **Negative** if overdue — frontend can show "LATE" state    |
+| `intervalDays`     | `number`          | Total interval length in days — denominator for the progress ring (`intervalDays × 86400` = total seconds) |
+| `gracePeriodDays`  | `number`          | Grace window after missing — turn the clock orange when `secondsRemaining < gracePeriodDays × 86400` |
+| `status`           | `string`          | `"ACTIVE"` · `"GRACE"` · `"TRIGGERED"` · `"REVOKED"` — see status table below                  |
+
+> **Breaking change from v1**: The old `daysRemaining` field has been replaced by `secondsRemaining`
+> for sub-day precision. Update any frontend code reading `daysRemaining`.
 
 #### Status values
 
@@ -348,21 +352,51 @@ None.
 | `401`  | Missing or expired JWT                             |
 | `404`  | No check-in config found (will not yet submitted)  |
 
-#### Frontend usage
+#### Frontend countdown clock usage
 
 ```typescript
-const status = await fetch('/api/check-in/status', {
-  headers: { 'Authorization': `Bearer ${token}` },
-}).then(r => r.json())
+// React hook — fetch once, tick client-side, refresh every 60s
+function useCountdown(token: string) {
+  const { data } = useQuery({
+    queryKey: ['checkInStatus'],
+    queryFn: () => apiFetch('/api/check-in/status'),
+    refetchInterval: 60_000,
+  })
 
-// Colour the countdown based on urgency
-const urgency =
-  status.daysRemaining <= 3  ? 'text-red-500'   :
-  status.daysRemaining <= 7  ? 'text-amber-500' :
-                               'text-green-500'
+  const [secondsLeft, setSecondsLeft] = useState(data?.secondsRemaining ?? 0)
+
+  useEffect(() => {
+    if (data) setSecondsLeft(data.secondsRemaining)
+  }, [data])
+
+  useEffect(() => {
+    const id = setInterval(() => setSecondsLeft(s => s - 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Progress ring — how far through the current interval are we?
+  const totalSeconds    = (data?.intervalDays ?? 30) * 86_400
+  const progressPercent = Math.min(100, ((totalSeconds - secondsLeft) / totalSeconds) * 100)
+
+  // Colour thresholds
+  const graceThreshold = (data?.gracePeriodDays ?? 7) * 86_400
+  const isWarning = secondsLeft < graceThreshold
+  const isDead    = data?.status === 'GRACE' || data?.status === 'TRIGGERED'
+
+  return { secondsLeft, progressPercent, isWarning, isDead, status: data?.status }
+}
+
+// Format helper
+function formatCountdown(s: number): string {
+  const abs  = Math.abs(s)
+  const days = Math.floor(abs / 86_400)
+  const hrs  = Math.floor((abs % 86_400) / 3_600)
+  const mins = Math.floor((abs % 3_600) / 60)
+  const secs = abs % 60
+  const sign = s < 0 ? '-' : ''
+  return `${sign}${days}d ${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`
+}
 ```
-
----
 
 ---
 
@@ -387,8 +421,6 @@ The check-in countdown is **not reset** — the deadline continues uninterrupted
 
 #### Request Body
 
-Same as `POST /api/will`:
-
 ```json
 {
   "willText": "Split equally between Alice (0xAAA...), Bob (0xBBB...) and Charlie (0xCCC...)"
@@ -402,8 +434,8 @@ Same as `POST /api/will`:
   "newConfigId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "templateType": "EQUAL_SPLIT",
   "beneficiaries": [
-    { "name": "Alice", "walletAddress": "0xAAA...", "basisPoints": 3334, "condition": "ALWAYS", "timeLockDays": 0 },
-    { "name": "Bob",   "walletAddress": "0xBBB...", "basisPoints": 3333, "condition": "ALWAYS", "timeLockDays": 0 },
+    { "name": "Alice",   "walletAddress": "0xAAA...", "basisPoints": 3334, "condition": "ALWAYS", "timeLockDays": 0 },
+    { "name": "Bob",     "walletAddress": "0xBBB...", "basisPoints": 3333, "condition": "ALWAYS", "timeLockDays": 0 },
     { "name": "Charlie", "walletAddress": "0xCCC...", "basisPoints": 3333, "condition": "ALWAYS", "timeLockDays": 0 }
   ],
   "oldContractAddress": "0xOLD_VAULT_ADDRESS",
@@ -419,7 +451,7 @@ Same as `POST /api/will`:
 | `templateType`       | `string`              | Vault type of the newly deployed contract                                   |
 | `beneficiaries`      | `Beneficiary[]`       | Resolved beneficiary list from the new will text                            |
 | `oldContractAddress` | `string`              | The now-inactive old vault — call `revoke()` on this address from MetaMask  |
-| `revokeTxHash`       | `string`              | Revoke tx hash (or placeholder if frontend handles the revoke call)         |
+| `revokeTxHash`       | `string`              | Revoke tx hash (or zero hash if frontend handles the revoke call)           |
 | `newContractAddress` | `string`              | The newly deployed vault — re-fund this address with ETH                   |
 | `deploymentTxHash`   | `string`              | New vault deployment transaction hash                                       |
 
@@ -436,20 +468,18 @@ Same as `POST /api/will`:
 #### Frontend usage
 
 ```typescript
-// Step 1 — call backend to deploy new vault
 const update = await apiFetch('/api/will', {
   method: 'PUT',
   body: JSON.stringify({ willText: newWillText }),
 })
 
-// Step 2 — user calls revoke() on old vault directly from their wallet
+// User calls revoke() on old vault directly from their wallet
 await writeContract({
   address: update.oldContractAddress as `0x${string}`,
   abi: DMSVaultAbi,
   functionName: 'revoke',
 })
 
-// Step 3 — prompt user to send ETH to new vault
 console.log('Please fund your new vault:', update.newContractAddress)
 ```
 
@@ -504,16 +534,6 @@ GET /api/vault/balance?tokens=0xUSDC_ON_BASE&tokens=0xWETH_ON_BASE
 | `ethBalanceEther` | `string`         | Human-readable ETH (6 decimal places max, trailing zeros stripped)       |
 | `tokens`          | `TokenBalance[]` | One entry per `tokens` query param (empty array if none supplied)        |
 
-#### `TokenBalance` object
-
-| Field              | Type     | Description                                              |
-|--------------------|----------|----------------------------------------------------------|
-| `tokenAddress`     | `string` | The ERC-20 contract address                              |
-| `symbol`           | `string` | Token symbol (e.g. `"USDC"`)                             |
-| `balanceRaw`       | `string` | Raw balance as returned by `balanceOf()` (integer string)|
-| `balanceFormatted` | `string` | Human-readable balance adjusted for token decimals       |
-| `decimals`         | `number` | Token decimal places (e.g. `6` for USDC, `18` for WETH) |
-
 #### Error responses
 
 | Status | Condition                                          |
@@ -527,23 +547,137 @@ GET /api/vault/balance?tokens=0xUSDC_ON_BASE&tokens=0xWETH_ON_BASE
 ```typescript
 const balance = await apiFetch('/api/vault/balance')
 
-// Display ETH balance
 console.log(`Vault holds: ${balance.ethBalanceEther} ETH`)
 
-// Display token balances
-balance.tokens.forEach(t => {
-  console.log(`${t.symbol}: ${t.balanceFormatted}`)
-})
-
-// Urgency: warn user if vault is unfunded
 if (balance.ethBalanceWei === '0' && balance.tokens.length === 0) {
   showWarning('Your vault is empty — send ETH to activate your inheritance plan.')
 }
 ```
 
-## 5. Health
+---
 
-### 5.1 `GET /actuator/health`
+## 5. Contracts
+
+### 5.1 `GET /api/contracts`
+
+🔒 **Auth required**
+
+**Purpose**: Returns all non-revoked vaults for the authenticated user, each enriched with its
+full beneficiary list. The frontend uses this to render the vault card grid, display which assets
+are at stake, and provide Basescan links.
+
+An **empty array** means the user has not submitted a will yet — the frontend should show the
+"Write your will" onboarding prompt.
+
+Vaults with `status = "REVOKED"` are excluded. `ACTIVE`, `TRIGGERING`, and `TRIGGERED` vaults
+are all returned so the user can see both their live vault and any historical triggered vaults.
+
+#### Request
+
+```http
+GET /api/contracts
+Authorization: Bearer <token>
+```
+
+No query parameters, no request body.
+
+#### Response `200 OK`
+
+```json
+[
+  {
+    "id": "f1e2d3c4-b5a6-7890-abcd-123456789abc",
+    "contractAddress": "0xVAULT_ADDRESS_1",
+    "deploymentTxHash": "0xDEPLOY_TX_HASH_1",
+    "vaultType": "STANDARD",
+    "status": "ACTIVE",
+    "deployedAt": "2026-03-01T12:00:00Z",
+    "beneficiaries": [
+      {
+        "label": "Alice",
+        "walletAddress": "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "basisPoints": 6000,
+        "condition": "ALWAYS"
+      },
+      {
+        "label": "Bob",
+        "walletAddress": "0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "basisPoints": 4000,
+        "condition": "ALWAYS"
+      }
+    ]
+  }
+]
+```
+
+The response is an **array** of `ContractSummaryResponse` objects ordered by `deployedAt` descending (most recent first).
+
+#### `ContractSummaryResponse` object
+
+| Field               | Type                    | Description                                                                           |
+|---------------------|-------------------------|---------------------------------------------------------------------------------------|
+| `id`                | `string` (UUID)         | Internal database ID of the contract record                                           |
+| `contractAddress`   | `string`                | On-chain vault address — link to `https://sepolia.basescan.org/address/<address>`    |
+| `deploymentTxHash`  | `string`                | Deployment transaction hash — link to `https://sepolia.basescan.org/tx/<hash>`       |
+| `vaultType`         | `string`                | `"STANDARD"` · `"TIME_LOCKED"` · `"CONDITIONAL_SURVIVAL"` — display as a badge       |
+| `status`            | `string`                | `"ACTIVE"` (green) · `"TRIGGERING"` (amber) · `"TRIGGERED"` (red)                   |
+| `deployedAt`        | `string` (ISO 8601)     | UTC timestamp of deployment — display as "deployed X days ago"                       |
+| `beneficiaries`     | `BeneficiarySummary[]`  | Ordered list of beneficiaries (0-based, mirrors on-chain array position)             |
+
+#### `BeneficiarySummary` object
+
+| Field           | Type     | Description                                                                    |
+|-----------------|----------|--------------------------------------------------------------------------------|
+| `label`         | `string` | Human-readable name extracted by LangChain4j at will submission time           |
+| `walletAddress` | `string` | `0x...` — the on-chain recipient address                                       |
+| `basisPoints`   | `number` | Share out of 10000 — divide by 100 for percentage display                     |
+| `condition`     | `string` | `"ALWAYS"` — unconditional · `"CONDITIONAL_SURVIVAL"` — requires alive proof  |
+
+#### Error responses
+
+| Status | Condition                          |
+|--------|------------------------------------|
+| `401`  | Missing or expired JWT             |
+
+> A `404` is **not** returned when no vaults exist — an empty array `[]` is returned instead.
+> This simplifies frontend logic (no error handling needed for the "no will yet" state).
+
+#### Frontend usage
+
+```typescript
+// Fetch on dashboard load
+const contracts = await apiFetch('/api/contracts')
+
+if (contracts.length === 0) {
+  return <OnboardingPrompt />
+}
+
+// Render vault cards
+contracts.map(vault => (
+  <VaultCard
+    key={vault.id}
+    address={vault.contractAddress}
+    vaultType={vault.vaultType}
+    status={vault.status}
+    deployedAt={vault.deployedAt}
+    beneficiaries={vault.beneficiaries}
+    basescanUrl={`https://sepolia.basescan.org/address/${vault.contractAddress}`}
+  />
+))
+
+// React Query polling (30s stale — contracts change rarely)
+const { data: contracts } = useQuery({
+  queryKey: ['contracts'],
+  queryFn: () => apiFetch('/api/contracts'),
+  staleTime: 30_000,
+})
+```
+
+---
+
+## 6. Health
+
+### 6.1 `GET /actuator/health`
 
 **Purpose**: Spring Boot Actuator health check. Used by Docker Compose `healthcheck` and any uptime monitors. No auth required.
 
@@ -561,7 +695,7 @@ if (balance.ethBalanceWei === '0' && balance.tokens.length === 0) {
 
 ---
 
-## 6. Error Responses
+## 7. Error Responses
 
 All error responses follow a consistent shape:
 
@@ -579,6 +713,7 @@ All error responses follow a consistent shape:
 | `400` | Bad request — validation failure or unprocessable will text           |
 | `401` | Unauthorised — missing, expired, or invalid JWT / bad SIWE signature  |
 | `404` | Resource not found — e.g. no will submitted yet                       |
+| `409` | Conflict — e.g. attempting to update an already-triggered vault       |
 | `500` | Server error — blockchain RPC failure, OpenAI timeout, etc.           |
 
 #### Handling `401` in the frontend
@@ -608,7 +743,7 @@ async function apiFetch(url: string, options: RequestInit = {}) {
 
 ---
 
-## 7. End-to-End Flow
+## 8. End-to-End Flow
 
 This is the complete sequence from wallet connect to a funded, monitored vault:
 
@@ -625,35 +760,40 @@ This is the complete sequence from wallet connect to a funded, monitored vault:
 4. POST /api/auth/verify  { walletAddress, nonce, signature }
         │  ← { token }   — store in localStorage
         ▼
-5. POST /api/will  { willText: "Give 60% to Alice (0x...) and 40% to Bob (0x...)" }
+5. GET /api/contracts
+        │  ← [] (empty — first visit) → show onboarding
+        ▼
+6. POST /api/will  { willText: "Give 60% to Alice (0x...) and 40% to Bob (0x...)" }
    Authorization: Bearer <token>
         │  ← { configId, templateType, beneficiaries, contractAddress, deploymentTxHash }
         ▼
-6. User sends ETH to contractAddress via MetaMask (direct transfer, no calldata)
+7. User sends ETH to contractAddress via MetaMask (direct transfer, no calldata)
         │
         ▼
-7. Dashboard polling loop:
-   GET /api/check-in/status  →  show countdown timer + status badge
+8. Dashboard polling loop:
+   GET /api/check-in/status  →  { lastCheckInAt, nextDueAt, secondsRemaining, intervalDays, gracePeriodDays, status }
+   GET /api/contracts        →  show vault cards with beneficiary list
         │
         ▼
-8. User clicks "I'm alive":
-   POST /api/check-in  →  reset countdown
+9. User clicks "I'm alive":
+   POST /api/check-in  →  reset countdown (nextDueAt advances by intervalDays)
         │
         ▼
-9. If user misses check-in:
-   Scheduler moves status → GRACE (7-day warning window)
-   GET /api/check-in/status returns status: "GRACE"
+10. If user misses check-in:
+    Scheduler moves status → GRACE (7-day warning window)
+    GET /api/check-in/status returns status: "GRACE", secondsRemaining is small or negative
         │
         ▼
-10. If grace period expires:
+11. If grace period expires:
     Scheduler calls vault.trigger() on-chain
     GET /api/check-in/status returns status: "TRIGGERED"
+    GET /api/contracts returns vault with status: "TRIGGERED"
     Funds distributed to beneficiaries on Base
 ```
 
 ---
 
-## 8. Type Reference
+## 9. Type Reference
 
 Quick reference for all types used across request and response bodies.
 
@@ -727,9 +867,12 @@ interface CheckInResponse {
 ### `CheckInStatusResponse`
 ```typescript
 interface CheckInStatusResponse {
-  nextDueAt: string       // ISO 8601 UTC
-  daysRemaining: number   // can be negative if overdue
-  status: CheckInStatus
+  lastCheckInAt:    string        // ISO 8601 UTC — clock start anchor
+  nextDueAt:        string        // ISO 8601 UTC — countdown target
+  secondsRemaining: number        // precise; negative = overdue
+  intervalDays:     number        // total period length (progress ring denominator)
+  gracePeriodDays:  number        // warn when secondsRemaining < gracePeriodDays * 86400
+  status:           CheckInStatus
 }
 
 type CheckInStatus = 'ACTIVE' | 'GRACE' | 'TRIGGERED' | 'REVOKED'
@@ -738,28 +881,56 @@ type CheckInStatus = 'ACTIVE' | 'GRACE' | 'TRIGGERED' | 'REVOKED'
 ### `UpdateWillResponse`
 ```typescript
 interface UpdateWillResponse {
-  newConfigId: string          // UUID of new beneficiary config
-  templateType: TemplateType
-  beneficiaries: Beneficiary[]
-  oldContractAddress: string   // call revoke() on this from MetaMask
-  revokeTxHash: string         // placeholder if frontend handles revoke
-  newContractAddress: string   // re-fund this address
-  deploymentTxHash: string
+  newConfigId:         string          // UUID of new beneficiary config
+  templateType:        TemplateType
+  beneficiaries:       Beneficiary[]
+  oldContractAddress:  string          // call revoke() on this from MetaMask
+  revokeTxHash:        string
+  newContractAddress:  string          // re-fund this address
+  deploymentTxHash:    string
+}
 ```
 
 ### `VaultBalanceResponse`
 ```typescript
 interface VaultBalanceResponse {
   contractAddress: string
-  ethBalanceWei: string        // raw wei as string (use BigInt for arithmetic)
-  ethBalanceEther: string      // formatted e.g. "0.05"
-  tokens: TokenBalance[]
+  ethBalanceWei:   string        // raw wei as string (use BigInt for arithmetic)
+  ethBalanceEther: string        // formatted e.g. "0.05"
+  tokens:          TokenBalance[]
 }
 
 interface TokenBalance {
-  tokenAddress: string
-  symbol: string
-  balanceRaw: string           // raw integer string
-  balanceFormatted: string     // human-readable e.g. "10.0"
-  decimals: number
+  tokenAddress:     string
+  symbol:           string
+  balanceRaw:       string       // raw integer string
+  balanceFormatted: string       // human-readable e.g. "10.0"
+  decimals:         number
+}
+```
+
+### `ContractSummaryResponse`
+```typescript
+interface ContractSummaryResponse {
+  id:               string                // UUID — internal DB id
+  contractAddress:  string                // "0x..." — on-chain vault
+  deploymentTxHash: string                // "0x..." — link to Basescan
+  vaultType:        VaultType
+  status:           ContractStatus
+  deployedAt:       string                // ISO 8601 UTC
+  beneficiaries:    BeneficiarySummary[]
+}
+
+type VaultType     = 'STANDARD' | 'TIME_LOCKED' | 'CONDITIONAL_SURVIVAL'
+type ContractStatus = 'ACTIVE' | 'TRIGGERING' | 'TRIGGERED'
+```
+
+### `BeneficiarySummary`
+```typescript
+interface BeneficiarySummary {
+  label:          string   // human-readable name from LangChain4j extraction
+  walletAddress:  string   // "0x..."
+  basisPoints:    number   // 0–10000
+  condition:      'ALWAYS' | 'CONDITIONAL_SURVIVAL'
+}
 ```

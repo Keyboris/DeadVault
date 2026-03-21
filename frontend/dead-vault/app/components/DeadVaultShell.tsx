@@ -75,6 +75,9 @@ export function DeadVaultShell() {
         const raw = localStorage.getItem(AUTH_PROFILE_STORAGE_KEY);
         const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
         if (!raw) {
+          if (token) {
+            setHasExistingAccount(true);
+          }
           setReady(true);
           return;
         }
