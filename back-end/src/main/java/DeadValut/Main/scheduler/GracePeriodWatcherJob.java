@@ -44,7 +44,7 @@ public class GracePeriodWatcherJob implements Job {
             var userId = config.getUserId();
 
             // Optimistic lock — prevents duplicate trigger if job fires twice on restart
-            int locked = contractRepo.setStatusIfActive(userId, "TRIGGERING");
+            int locked = contractRepo.setStatusIfActive(userId);
             if (locked == 0) {
                 log.warn("Skipping user {} — already triggering or triggered", userId);
                 return;
