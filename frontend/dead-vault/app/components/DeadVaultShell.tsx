@@ -9,7 +9,6 @@ import { DeadVaultApp } from "./DeadVaultApp";
 import {
   AUTH_PROFILE_STORAGE_KEY,
   type Recipient,
-  type VaultContract,
   type StoredProfile,
 } from "./authStorage";
 import { useSiweAuth } from "@/src/hooks/useSiweAuth";
@@ -107,38 +106,6 @@ export function DeadVaultShell() {
     });
   }, []);
 
-  const handleCreateContract = useCallback((title: string, content: string) => {
-    setProfile((current) => {
-      if (!current) {
-        return current;
-      }
-
-      const timestamp = new Date().toISOString();
-      const nextContract: VaultContract = {
-        id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`,
-        title,
-        content,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
-      const next = { ...current, contracts: [nextContract, ...current.contracts] };
-      localStorage.setItem(AUTH_PROFILE_STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  const handleDeleteContract = useCallback((id: string) => {
-    setProfile((current) => {
-      if (!current) {
-        return current;
-      }
-
-      const next = { ...current, contracts: current.contracts.filter((contract) => contract.id !== id) };
-      localStorage.setItem(AUTH_PROFILE_STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
   const handleDeleteAccount = useCallback(() => {
     localStorage.removeItem(AUTH_PROFILE_STORAGE_KEY);
     localStorage.removeItem(DMS_TOKEN_STORAGE_KEY);
@@ -194,10 +161,7 @@ export function DeadVaultShell() {
   return (
     <DeadVaultApp
       initialWalletAddress={profile.walletAddress}
-      contracts={profile.contracts}
       onWalletAddressChange={handleWalletAddressChange}
-      onCreateContract={handleCreateContract}
-      onDeleteContract={handleDeleteContract}
       onDeleteAccount={handleDeleteAccount}
       onLogout={handleLogout}
     />

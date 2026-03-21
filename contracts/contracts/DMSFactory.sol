@@ -18,6 +18,7 @@ contract DMSFactory {
     uint8 public constant TYPE_CONDITIONAL = 2;  // CONDITIONAL_SURVIVAL
 
     event VaultCreated(address indexed owner, address vault, uint8 vaultType);
+    event VaultSuperseded(address indexed owner, address indexed oldVault, address indexed newVault, uint8 vaultType);
 
     constructor(address _triggerAuthority) {
         triggerAuthority = _triggerAuthority;
@@ -31,7 +32,7 @@ contract DMSFactory {
         address payable[] calldata wallets,
         uint16[] calldata basisPoints
     ) external returns (address) {
-        _requireNoExistingVault(owner);
+        _requireOwner(owner);
         DMSVault vault = new DMSVault(owner, triggerAuthority, wallets, basisPoints);
         return _register(owner, address(vault), TYPE_STANDARD);
     }
@@ -47,7 +48,7 @@ contract DMSFactory {
         address payable[] calldata wallets,
         uint16[] calldata basisPoints
     ) external returns (address) {
-        _requireNoExistingVault(owner);
+        _requireOwner(owner);
         DMSTimeLockVault vault = new DMSTimeLockVault(
             owner, triggerAuthority, unlockTime, wallets, basisPoints
         );
@@ -64,7 +65,7 @@ contract DMSFactory {
         uint16[] calldata basisPoints,
         bool[]   calldata mustSurvive
     ) external returns (address) {
-        _requireNoExistingVault(owner);
+        _requireOwner(owner);
         DMSConditionalVault vault = new DMSConditionalVault(
             owner, triggerAuthority, wallets, basisPoints, mustSurvive
         );
@@ -75,14 +76,17 @@ contract DMSFactory {
         return vaults[owner];
     }
 
-    function _requireNoExistingVault(address owner) internal view {
+    function _requireOwner(address owner) internal pure {
         require(owner != address(0), "owner is zero address");
-        require(vaults[owner] == address(0), "vault already exists for this owner");
     }
 
     function _register(address owner, address vault, uint8 vaultType) internal returns (address) {
+        address previousVault = vaults[owner];
         vaults[owner] = vault;
         emit VaultCreated(owner, vault, vaultType);
+        if (previousVault != address(0) && previousVault != vault) {
+            emit VaultSuperseded(owner, previousVault, vault, vaultType);
+        }
         return vault;
     }
 }

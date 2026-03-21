@@ -86,15 +86,23 @@ public class IntentExtractionService {
 
             // Deterministic post-validation — never trust the LLM for arithmetic or consistency
             List<String> errors = new ArrayList<>(result.validationErrors());
+            boolean hasBeneficiaries = !result.resolvedBeneficiaries().isEmpty();
+            boolean hasAddressLikeText = willText != null && willText.matches("(?is).*(0x[a-f0-9]{40}).*");
 
-            if (result.resolvedBeneficiaries().isEmpty()) {
-                errors.add("No beneficiaries could be extracted from the will");
+            if (!hasBeneficiaries) {
+                if (hasAddressLikeText) {
+                    errors.add("No beneficiaries could be extracted from the will");
+                } else {
+                    errors.add("No beneficiaries could be extracted from the will — include beneficiary names and 0x wallet addresses");
+                }
             }
 
-            int total = result.resolvedBeneficiaries().stream()
-                .mapToInt(ResolvedBeneficiary::basisPoints).sum();
-            if (total != 10000) {
-                errors.add("Basis points sum to " + total + ", must be 10000");
+            if (hasBeneficiaries) {
+                int total = result.resolvedBeneficiaries().stream()
+                    .mapToInt(ResolvedBeneficiary::basisPoints).sum();
+                if (total != 10000) {
+                    errors.add("Basis points sum to " + total + ", must be 10000");
+                }
             }
 
             long nullAddresses = result.resolvedBeneficiaries().stream()

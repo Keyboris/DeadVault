@@ -4,7 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { IconType } from "react-icons";
 import type { VaultContract } from "./authStorage";
-import { checkIn, getCheckInStatus, getContracts as getContractsRequest, submitWill as submitWillRequest, updateWill as updateWillRequest } from "@/app/lib/api/endpoints";
+import {
+  checkIn,
+  getCheckInStatus,
+  getContracts as getContractsRequest,
+  getVaultBalance,
+  submitWill as submitWillRequest,
+  updateWill as updateWillRequest,
+} from "@/app/lib/api/endpoints";
 import { ApiClientError } from "@/app/lib/api/client";
 import { DMS_TOKEN_STORAGE_KEY } from "@/app/lib/api/config";
 import type { ContractSummaryResponse } from "@/app/lib/api/types";
@@ -33,20 +40,21 @@ type ScreenName = "home" | "payment" | "address" | "settings";
 
 function formatCountdown(isoTime: string | null, currentMs: number): string {
   if (!isoTime) {
-    return "--:--:--";
+    return "00:00:00:00";
   }
 
   const target = new Date(isoTime).getTime();
   if (Number.isNaN(target)) {
-    return "--:--:--";
+    return "00:00:00:00";
   }
 
   const diffMs = Math.max(0, target - currentMs);
   const totalSeconds = Math.floor(diffMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return `${String(days).padStart(2, "0")}:${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function screenFromPath(pathname: string): ScreenName {
@@ -193,6 +201,9 @@ export function DeadVaultApp({
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [statusError, setStatusError] = useState("");
   const [statusText, setStatusText] = useState("UNKNOWN");
+  const [contractStatus, setContractStatus] = useState("UNKNOWN");
+  const [vaultValueEth, setVaultValueEth] = useState("0");
+  const [vaultValueError, setVaultValueError] = useState("");
   const [nextDueAt, setNextDueAt] = useState<string | null>(null);
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
   const [clockTick, setClockTick] = useState(Date.now());
@@ -228,12 +239,33 @@ export function DeadVaultApp({
       const mapped = response.map(mapContractSummaryToVaultContract);
       setContracts(mapped);
       setContractsError("");
+      setContractStatus(response[0]?.status ?? "NO_VAULT");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Contract list is temporarily unavailable.";
       setContractsError(message);
       setContracts([]);
+      setContractStatus("UNAVAILABLE");
     } finally {
       setIsLoadingContracts(false);
+    }
+  }, []);
+
+  const refreshVaultValue = useCallback(async () => {
+    const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
+    if (!token) {
+      setVaultValueEth("0");
+      setVaultValueError("");
+      return;
+    }
+
+    try {
+      const balance = await getVaultBalance();
+      setVaultValueEth(balance.ethBalanceEther);
+      setVaultValueError("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Vault value unavailable.";
+      setVaultValueError(message);
+      setVaultValueEth("0");
     }
   }, []);
 
@@ -250,7 +282,8 @@ export function DeadVaultApp({
       setStatusText(status.status);
       setStatusError("");
       setNextDueAt(status.nextDueAt);
-      setDaysRemaining(status.daysRemaining);
+      const derivedDays = Math.max(0, Math.floor(status.secondsRemaining / 86400));
+      setDaysRemaining(derivedDays);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Check-in status is temporarily unavailable.";
       setStatusError(message);
@@ -540,6 +573,14 @@ export function DeadVaultApp({
     void refreshContracts();
   }, [refreshContracts]);
 
+  useEffect(() => {
+    void refreshVaultValue();
+    const poll = setInterval(() => {
+      void refreshVaultValue();
+    }, 45000);
+    return () => clearInterval(poll);
+  }, [refreshVaultValue]);
+
   return (
     <div className="dv-root">
       <header className="dv-topbar">
@@ -576,6 +617,9 @@ export function DeadVaultApp({
               contracts={contracts}
               countdownText={countdownText}
               checkInStatus={statusText}
+              contractStatus={contractStatus}
+              vaultValueEth={vaultValueEth}
+              vaultValueError={vaultValueError}
               daysRemaining={daysRemaining}
               willTitle={willTitle}
               willContent={willContent}
@@ -599,6 +643,9 @@ export function DeadVaultApp({
               contracts={contracts}
               countdownText={countdownText}
               checkInStatus={statusText}
+              contractStatus={contractStatus}
+              vaultValueEth={vaultValueEth}
+              vaultValueError={vaultValueError}
               daysRemaining={daysRemaining}
               willTitle={willTitle}
               willContent={willContent}
@@ -644,6 +691,7 @@ export function DeadVaultApp({
               privacyShield={privacyShield}
               walletAddress={walletAddress}
               walletError={walletError}
+              contractStatus={contractStatus}
               onToggleAuto={() => setAutoTrigger((v) => !v)}
               onTogglePrivacy={() => setPrivacyShield((v) => !v)}
               onOpenAction={openActionPage}
@@ -657,6 +705,7 @@ export function DeadVaultApp({
               privacyShield={privacyShield}
               walletAddress={walletAddress}
               walletError={walletError}
+              contractStatus={contractStatus}
               onToggleAuto={() => setAutoTrigger((v) => !v)}
               onTogglePrivacy={() => setPrivacyShield((v) => !v)}
               onOpenAction={openActionPage}
@@ -727,6 +776,9 @@ type DashboardProps = {
   contracts: VaultContract[];
   countdownText: string;
   checkInStatus: string;
+  contractStatus: string;
+  vaultValueEth: string;
+  vaultValueError: string;
   daysRemaining: number | null;
   willTitle: string;
   willContent: string;
@@ -750,6 +802,9 @@ function MobileDashboard({
   contracts,
   countdownText,
   checkInStatus,
+  contractStatus,
+  vaultValueEth,
+  vaultValueError,
   daysRemaining,
   willTitle,
   willContent,
@@ -799,9 +854,18 @@ function MobileDashboard({
         <div className="dv-action-row">
           <div>
             <span>Wallet Balance</span>
-            <strong>Unavailable</strong>
+            <strong>{vaultValueEth} ETH</strong>
           </div>
           <FaChevronRight className="dv-icon-inline" aria-hidden="true" />
+        </div>
+        {vaultValueError ? <p className="dv-inline-error">{vaultValueError}</p> : null}
+
+        <div className="dv-action-row">
+          <div>
+            <span>Contract Status</span>
+            <strong>{contractStatus}</strong>
+          </div>
+          <FaCircleInfo className="dv-icon-inline" aria-hidden="true" />
         </div>
 
         <div className="dv-action-row">
@@ -840,6 +904,9 @@ function DesktopDashboard({
   contracts,
   countdownText,
   checkInStatus,
+  contractStatus,
+  vaultValueEth,
+  vaultValueError,
   daysRemaining,
   willTitle,
   willContent,
@@ -871,13 +938,15 @@ function DesktopDashboard({
           <div className="dv-balance-head">
             <div>
               <span>VAULT BALANCE</span>
-              <h3>Pending backend endpoint</h3>
+              <h3>{vaultValueEth} ETH</h3>
+              <span style={{ marginTop: "0.35rem", letterSpacing: "0.08em" }}>STATUS: {contractStatus}</span>
             </div>
             <div className="dv-chain-row">
               <button type="button" className={chain === "Ethereum" ? "is-selected" : ""} onClick={() => onSelectChain("Ethereum")}>Ethereum</button>
               <button type="button" className={chain === "Polygon" ? "is-selected" : ""} onClick={() => onSelectChain("Polygon")}>Polygon</button>
             </div>
           </div>
+          {vaultValueError ? <p className="dv-inline-error">{vaultValueError}</p> : null}
           <div className="dv-balance-actions">
             <button type="button" className="dv-btn-light" onClick={() => onOpenAction("withdraw-assets")}>Withdraw Assets</button>
             <button type="button" className="dv-fab" onClick={() => onOpenAction("create-vault-item")}>
@@ -1128,6 +1197,7 @@ type ProfileProps = {
   privacyShield: boolean;
   walletAddress: string | null;
   walletError: string;
+  contractStatus: string;
   onToggleAuto: () => void;
   onTogglePrivacy: () => void;
   onOpenAction: (slug: string) => void;
@@ -1152,7 +1222,7 @@ type SettingsProps = {
   onLogout?: () => void;
 };
 
-function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError, onToggleAuto, onTogglePrivacy, onOpenAction, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
+function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError, contractStatus, onToggleAuto, onTogglePrivacy, onOpenAction, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
   return (
     <section className="dv-mobile-stack">
       <h1 className="dv-hero-title">ADDRESS SETTINGS</h1>
@@ -1169,7 +1239,7 @@ function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError,
       <h2 className="dv-section-title">CONTRACT</h2>
       <div className="dv-vault-card">
         <span>VAULT STATUS</span>
-        <h3>ACTIVE</h3>
+        <h3>{contractStatus}</h3>
         <p>Heartbeat monitoring engaged</p>
       </div>
       <div className="dv-profile-card">
@@ -1215,7 +1285,7 @@ function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError,
   );
 }
 
-function DesktopProfile({ autoTrigger, privacyShield, walletAddress, walletError, onToggleAuto, onTogglePrivacy, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
+function DesktopProfile({ autoTrigger, privacyShield, walletAddress, walletError, contractStatus, onToggleAuto, onTogglePrivacy, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
   return (
     <section className="dv-desktop-grid">
       <div className="dv-col-left">
@@ -1234,7 +1304,7 @@ function DesktopProfile({ autoTrigger, privacyShield, walletAddress, walletError
         </div>
         <div className="dv-vault-card">
           <span>VAULT STATUS</span>
-          <h3>ACTIVE</h3>
+          <h3>{contractStatus}</h3>
         </div>
         <div className="dv-profile-card">
           <span>SECURITY PARAMETERS</span>

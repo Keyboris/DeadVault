@@ -9,6 +9,7 @@ import type {
   TokenResponse,
   UpdateWillResponse,
   VerifyRequest,
+  VaultBalanceResponse,
   WillRequest,
   WillResponse,
 } from "./types";
@@ -41,6 +42,15 @@ export function updateWill(payload: WillRequest): Promise<UpdateWillResponse> {
 
 export function getContracts(): Promise<ContractSummaryResponse[]> {
   return apiFetch<ContractSummaryResponse[]>("/api/contracts");
+}
+
+export function getVaultBalance(tokens: string[] = []): Promise<VaultBalanceResponse> {
+  const query = new URLSearchParams();
+  for (const token of tokens) {
+    query.append("tokens", token);
+  }
+  const suffix = query.toString();
+  return apiFetch<VaultBalanceResponse>(`/api/vault/balance${suffix ? `?${suffix}` : ""}`);
 }
 
 export function checkIn(): Promise<CheckInResponse> {

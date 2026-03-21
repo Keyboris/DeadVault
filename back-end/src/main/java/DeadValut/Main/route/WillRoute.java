@@ -2,6 +2,7 @@
 package DeadValut.Main.route;
 
 import DeadValut.Main.controller.WillController;
+import DeadValut.Main.model.UpdateWillResponse;
 import DeadValut.Main.model.WillRequest;
 import DeadValut.Main.model.WillResponse;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ public class WillRoute {
     private final WillController willController;
 
     public WillRoute(WillController willController) {
+        
         this.willController = willController;
     }
 
@@ -38,5 +40,12 @@ public class WillRoute {
             @AuthenticationPrincipal UUID userId,
             @Valid @RequestBody WillRequest request) {
         return ResponseEntity.ok(willController.submitWill(userId, request));
+    }
+
+    @PutMapping
+    public ResponseEntity<UpdateWillResponse> updateWill(
+            @AuthenticationPrincipal UUID userId,
+            @Valid @RequestBody WillRequest request) {
+        return ResponseEntity.ok(willController.updateWill(userId, request));
     }
 }

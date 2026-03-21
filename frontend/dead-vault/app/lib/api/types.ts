@@ -60,14 +60,32 @@ export type ContractSummaryResponse = {
   beneficiaries: BeneficiarySummary[];
 };
 
+export type TokenBalance = {
+  tokenAddress: string;
+  symbol: string;
+  balanceRaw: string;
+  balanceFormatted: string;
+  decimals: number;
+};
+
+export type VaultBalanceResponse = {
+  contractAddress: string;
+  ethBalanceWei: string;
+  ethBalanceEther: string;
+  tokens: TokenBalance[];
+};
+
 export type CheckInResponse = {
   nextDueAt: string;
   intervalDays: number;
 };
 
 export type CheckInStatusResponse = {
+  lastCheckInAt: string;
   nextDueAt: string;
-  daysRemaining: number;
+  secondsRemaining: number;
+  intervalDays: number;
+  gracePeriodDays: number;
   status: "ACTIVE" | "GRACE" | "TRIGGERED" | "REVOKED" | string;
 };
 

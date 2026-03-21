@@ -3,8 +3,11 @@ package DeadValut.Main.service;
 
 import DeadValut.Main.model.*;
 import DeadValut.Main.repository.*;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -46,15 +49,24 @@ public class WillService {
 
         // 1. Fetch user to get wallet address (needed as vault owner)
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         String userWalletAddress = user.getWalletAddress();
+
+        // 1b. POST /api/will is create-only. If a vault already exists, clients must use PUT /api/will.
+        if (contractRepo.findByUserId(userId).isPresent()) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Vault already exists for this owner — use PUT /api/will to update"
+            );
+        }
 
         // 2. Run LangChain4j intent extraction — returns richer result including timeLockDays
         IntentExtractionResult extraction = intentExtractionService.extract(willText);
 
         // 3. Hard-stop if the LLM could not resolve all wallet addresses or arithmetic is wrong
         if (!extraction.validationErrors().isEmpty()) {
-            throw new IllegalArgumentException(
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
                 "Will could not be processed: " + String.join("; ", extraction.validationErrors())
             );
         }
@@ -102,7 +114,15 @@ public class WillService {
         } catch (Exception e) {
             config.setStatus("FAILED");
             configRepo.save(config);
-            throw new RuntimeException("Vault deployment failed: " + e.getMessage(), e);
+            String message = e.getMessage() != null ? e.getMessage() : "Vault deployment failed";
+            if (message.toLowerCase().contains("vault already exists for this owner")) {
+                throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Vault already exists for this owner — use PUT /api/will to update",
+                    e
+                );
+            }
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Blockchain deployment failed", e);
         }
 
         // 8. Persist contract record.
@@ -115,7 +135,17 @@ public class WillService {
         contract.setDeploymentTxHash(txHash);
         contract.setVaultType(vaultType);
         contract.setStatus("ACTIVE");
-        contractRepo.save(contract);
+        try {
+            contractRepo.save(contract);
+        } catch (DataIntegrityViolationException e) {
+            config.setStatus("FAILED");
+            configRepo.save(config);
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Vault already exists for this owner — use PUT /api/will to update",
+                e
+            );
+        }
 
         config.setStatus("DEPLOYED");
         configRepo.save(config);
