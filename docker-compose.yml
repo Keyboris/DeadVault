@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dms
+      POSTGRES_USER: dms
+      POSTGRES_PASSWORD: dms
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dms"]
+      interval: 5s
+      retries: 5
+
+  backend:
+    build: ./back-end
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dms
+      SPRING_DATASOURCE_USERNAME: dms
+      SPRING_DATASOURCE_PASSWORD: dms
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BASE_RPC_URL: ${BASE_RPC_URL}
+      BASE_CHAIN_ID: ${BASE_CHAIN_ID}
+      HOT_WALLET_PRIVATE_KEY: ${HOT_WALLET_PRIVATE_KEY}
+      FACTORY_CONTRACT_ADDRESS: ${FACTORY_CONTRACT_ADDRESS}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -77,7 +77,7 @@
       <artifactId>spring-boot-starter-quartz</artifactId>
     </dependency>
 
-    <!-- LangChain4j — OpenAI -->
+    <!-- LangChain4j — OpenAI (replaces langchain4j-ollama) -->
     <dependency>
       <groupId>dev.langchain4j</groupId>
       <artifactId>langchain4j</artifactId>
