@@ -1,4 +1,7 @@
 require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
+
+const HOT_WALLET_PRIVATE_KEY = process.env.HOT_WALLET_PRIVATE_KEY;
 
 module.exports = {
   solidity: {
@@ -13,14 +16,14 @@ module.exports = {
     // Base Sepolia testnet — chain ID 84532
     baseSepolia: {
       url: process.env.BASE_RPC_URL || "https://sepolia.base.org",
-      accounts: [process.env.HOT_WALLET_PRIVATE_KEY],
+      accounts: HOT_WALLET_PRIVATE_KEY ? [HOT_WALLET_PRIVATE_KEY] : [],
       chainId: 84532,
       gasPrice: "auto",
     },
     // Base Mainnet — chain ID 8453
     base: {
       url: process.env.BASE_MAINNET_RPC_URL || "https://mainnet.base.org",
-      accounts: [process.env.HOT_WALLET_PRIVATE_KEY],
+      accounts: HOT_WALLET_PRIVATE_KEY ? [HOT_WALLET_PRIVATE_KEY] : [],
       chainId: 8453,
       gasPrice: "auto",
     },
