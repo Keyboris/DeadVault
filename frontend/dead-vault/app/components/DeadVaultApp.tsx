@@ -77,6 +77,31 @@ type EventItem = {
 
 type ChainName = "Ethereum" | "Polygon";
 
+type EthereumProvider = {
+  isCoinbaseWallet?: boolean;
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on?: (event: string, listener: (...args: unknown[]) => void) => void;
+  removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
+};
+
+const BASE_CHAIN_ID_HEX = "0x2105";
+
+function getEthereumProvider(): EthereumProvider | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  const maybeEthereum = (window as Window & { ethereum?: EthereumProvider }).ethereum;
+  return maybeEthereum;
+}
+
+function shortAddress(address: string): string {
+  if (address.length < 10) {
+    return address;
+  }
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 const mobileEvents: EventItem[] = [
   { title: "Contract Authorized", desc: "Signature verification complete", age: "12m", Icon: FaFileContract },
   { title: "Vault Heartbeat Detected", desc: "Pulse confirmed at 04:00 UTC", age: "4h", Icon: FaHeartPulse },
@@ -121,6 +146,9 @@ export function DeadVaultApp() {
   const [biometricUnlock, setBiometricUnlock] = useState(false);
   const [sessionTimeout, setSessionTimeout] = useState(true);
   const [chain, setChain] = useState<ChainName>("Ethereum");
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [walletChainId, setWalletChainId] = useState<string | null>(null);
+  const [walletError, setWalletError] = useState<string>("");
   const pathname = usePathname();
   const router = useRouter();
 
@@ -134,6 +162,74 @@ export function DeadVaultApp() {
 
   const openActionPage = (slug: string) => {
     navigateWithTransition(router.push, `/action/${slug}`);
+  };
+
+  const validateBaseNetwork = (chainId: string | null) => {
+    if (!chainId) {
+      setWalletError("Could not detect current network from Coinbase Wallet.");
+      return;
+    }
+    if (chainId.toLowerCase() !== BASE_CHAIN_ID_HEX) {
+      setWalletError("Please switch Coinbase Wallet to Base network to continue.");
+      return;
+    }
+    setWalletError("");
+  };
+
+  const connectCoinbaseWallet = async () => {
+    const provider = getEthereumProvider();
+
+    if (!provider || !provider.isCoinbaseWallet) {
+      setWalletError("Coinbase Wallet not detected. Install Coinbase Wallet extension/app first.");
+      return;
+    }
+
+    try {
+      await provider.request({ method: "eth_requestAccounts" });
+      const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
+      const chainId = (await provider.request({ method: "eth_chainId" })) as string;
+      const firstAccount = accounts[0] ?? null;
+      setWalletAddress(firstAccount);
+      setWalletChainId(chainId ?? null);
+      if (!firstAccount) {
+        setWalletError("No connected Coinbase wallet account.");
+        return;
+      }
+      validateBaseNetwork(chainId ?? null);
+    } catch {
+      setWalletError("Wallet connection request was cancelled or failed.");
+    }
+  };
+
+  const changeCoinbaseWallet = async () => {
+    const provider = getEthereumProvider();
+    if (!provider || !provider.isCoinbaseWallet) {
+      setWalletError("Coinbase Wallet not detected. Install Coinbase Wallet extension/app first.");
+      return;
+    }
+
+    try {
+      // Re-requesting accounts opens wallet account selection in compatible Coinbase clients.
+      await provider.request({ method: "eth_requestAccounts" });
+      const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
+      const chainId = (await provider.request({ method: "eth_chainId" })) as string;
+      const firstAccount = accounts[0] ?? null;
+      setWalletAddress(firstAccount);
+      setWalletChainId(chainId ?? null);
+      if (!firstAccount) {
+        setWalletError("No connected Coinbase wallet account.");
+        return;
+      }
+      validateBaseNetwork(chainId ?? null);
+    } catch {
+      setWalletError("Wallet change request was cancelled or failed.");
+    }
+  };
+
+  const disconnectCoinbaseWallet = () => {
+    setWalletAddress(null);
+    setWalletChainId(null);
+    setWalletError("");
   };
 
   useEffect(() => {
@@ -151,6 +247,65 @@ export function DeadVaultApp() {
     const syncedScreen = screenFromPath(pathname);
     setScreen(syncedScreen);
   }, [pathname]);
+
+  useEffect(() => {
+    async function loadExistingCoinbaseSession() {
+      const provider = getEthereumProvider();
+      if (!provider || !provider.isCoinbaseWallet) {
+        return;
+      }
+
+      try {
+        const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
+        const chainId = (await provider.request({ method: "eth_chainId" })) as string;
+        const firstAccount = accounts[0] ?? null;
+        setWalletAddress(firstAccount);
+        setWalletChainId(chainId ?? null);
+        if (!firstAccount) {
+          setWalletError("No connected Coinbase wallet account.");
+          return;
+        }
+        validateBaseNetwork(chainId ?? null);
+      } catch {
+        setWalletAddress(null);
+        setWalletChainId(null);
+      }
+    }
+
+    loadExistingCoinbaseSession();
+  }, []);
+
+  useEffect(() => {
+    const provider = getEthereumProvider();
+    if (!provider || !provider.isCoinbaseWallet || !provider.on || !provider.removeListener) {
+      return;
+    }
+
+    const handleAccountsChanged = (accounts: unknown) => {
+      const nextAccounts = Array.isArray(accounts) ? (accounts as string[]) : [];
+      const nextAccount = nextAccounts[0] ?? null;
+      setWalletAddress(nextAccount);
+      if (!nextAccount) {
+        setWalletError("No connected Coinbase wallet account.");
+      } else if (walletChainId?.toLowerCase() === BASE_CHAIN_ID_HEX) {
+        setWalletError("");
+      }
+    };
+
+    const handleChainChanged = (chainId: unknown) => {
+      const nextChainId = typeof chainId === "string" ? chainId : null;
+      setWalletChainId(nextChainId);
+      validateBaseNetwork(nextChainId);
+    };
+
+    provider.on("accountsChanged", handleAccountsChanged);
+    provider.on("chainChanged", handleChainChanged);
+
+    return () => {
+      provider.removeListener?.("accountsChanged", handleAccountsChanged);
+      provider.removeListener?.("chainChanged", handleChainChanged);
+    };
+  }, [walletChainId]);
 
   useEffect(() => {
     let mounted = true;
@@ -224,17 +379,27 @@ export function DeadVaultApp() {
             <DesktopProfile
               autoTrigger={autoTrigger}
               privacyShield={privacyShield}
+              walletAddress={walletAddress}
+              walletError={walletError}
               onToggleAuto={() => setAutoTrigger((v) => !v)}
               onTogglePrivacy={() => setPrivacyShield((v) => !v)}
               onOpenAction={openActionPage}
+              onConnectWallet={connectCoinbaseWallet}
+              onChangeWallet={changeCoinbaseWallet}
+              onDisconnectWallet={disconnectCoinbaseWallet}
             />
           ) : (
             <MobileProfile
               autoTrigger={autoTrigger}
               privacyShield={privacyShield}
+              walletAddress={walletAddress}
+              walletError={walletError}
               onToggleAuto={() => setAutoTrigger((v) => !v)}
               onTogglePrivacy={() => setPrivacyShield((v) => !v)}
               onOpenAction={openActionPage}
+              onConnectWallet={connectCoinbaseWallet}
+              onChangeWallet={changeCoinbaseWallet}
+              onDisconnectWallet={disconnectCoinbaseWallet}
             />
           )
         ) : null}
@@ -245,20 +410,28 @@ export function DeadVaultApp() {
               securityAlerts={securityAlerts}
               biometricUnlock={biometricUnlock}
               sessionTimeout={sessionTimeout}
+              walletAddress={walletAddress}
+              walletError={walletError}
               onToggleSecurityAlerts={() => setSecurityAlerts((v) => !v)}
               onToggleBiometricUnlock={() => setBiometricUnlock((v) => !v)}
               onToggleSessionTimeout={() => setSessionTimeout((v) => !v)}
-              onOpenAction={openActionPage}
+              onConnectWallet={connectCoinbaseWallet}
+              onChangeWallet={changeCoinbaseWallet}
+              onDisconnectWallet={disconnectCoinbaseWallet}
             />
           ) : (
             <MobileSettings
               securityAlerts={securityAlerts}
               biometricUnlock={biometricUnlock}
               sessionTimeout={sessionTimeout}
+              walletAddress={walletAddress}
+              walletError={walletError}
               onToggleSecurityAlerts={() => setSecurityAlerts((v) => !v)}
               onToggleBiometricUnlock={() => setBiometricUnlock((v) => !v)}
               onToggleSessionTimeout={() => setSessionTimeout((v) => !v)}
-              onOpenAction={openActionPage}
+              onConnectWallet={connectCoinbaseWallet}
+              onChangeWallet={changeCoinbaseWallet}
+              onDisconnectWallet={disconnectCoinbaseWallet}
             />
           )
         ) : null}
@@ -460,29 +633,43 @@ function DesktopNotifications() {
 type ProfileProps = {
   autoTrigger: boolean;
   privacyShield: boolean;
+  walletAddress: string | null;
+  walletError: string;
   onToggleAuto: () => void;
   onTogglePrivacy: () => void;
   onOpenAction: (slug: string) => void;
+  onConnectWallet: () => void;
+  onChangeWallet: () => void;
+  onDisconnectWallet: () => void;
 };
 
 type SettingsProps = {
   securityAlerts: boolean;
   biometricUnlock: boolean;
   sessionTimeout: boolean;
+  walletAddress: string | null;
+  walletError: string;
   onToggleSecurityAlerts: () => void;
   onToggleBiometricUnlock: () => void;
   onToggleSessionTimeout: () => void;
-  onOpenAction: (slug: string) => void;
+  onConnectWallet: () => void;
+  onChangeWallet: () => void;
+  onDisconnectWallet: () => void;
 };
 
-function MobileProfile({ autoTrigger, privacyShield, onToggleAuto, onTogglePrivacy, onOpenAction }: ProfileProps) {
+function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError, onToggleAuto, onTogglePrivacy, onOpenAction, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
   return (
     <section className="dv-mobile-stack">
       <h1 className="dv-hero-title">ADDRESS SETTINGS</h1>
       <p className="dv-subcopy">Manage recipient identity, routing preferences, and delivery safeguards.</p>
       <div className="dv-profile-card">
-        <span>CONNECTED WALLET</span>
-        <div className="dv-profile-row"><strong>0x8F22...E491</strong><button type="button" onClick={() => onOpenAction("change-wallet")}>Change</button></div>
+        <span>CONNECTED WALLET (COINBASE)</span>
+        <div className="dv-profile-row">
+          <strong>{walletAddress ? shortAddress(walletAddress) : "Not connected"}</strong>
+          {walletAddress ? <button type="button" onClick={onChangeWallet}>Change</button> : <button type="button" onClick={onConnectWallet}>Connect</button>}
+        </div>
+        {walletAddress ? <button type="button" className="dv-wallet-disconnect" onClick={onDisconnectWallet}>Disconnect</button> : null}
+        {walletError ? <p className="dv-inline-error">{walletError}</p> : null}
       </div>
       <h2 className="dv-section-title">CONTRACT</h2>
       <div className="dv-vault-card">
@@ -533,7 +720,7 @@ function MobileProfile({ autoTrigger, privacyShield, onToggleAuto, onTogglePriva
   );
 }
 
-function DesktopProfile({ autoTrigger, privacyShield, onToggleAuto, onTogglePrivacy, onOpenAction }: ProfileProps) {
+function DesktopProfile({ autoTrigger, privacyShield, walletAddress, walletError, onToggleAuto, onTogglePrivacy, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
   return (
     <section className="dv-desktop-grid">
       <div className="dv-col-left">
@@ -542,8 +729,13 @@ function DesktopProfile({ autoTrigger, privacyShield, onToggleAuto, onTogglePriv
       </div>
       <div className="dv-col-right dv-desktop-stack">
         <div className="dv-profile-card">
-          <span>CONNECTED WALLET</span>
-          <div className="dv-profile-row"><strong>0x8F22...E491</strong><button type="button" onClick={() => onOpenAction("change-wallet")}>Change</button></div>
+          <span>CONNECTED WALLET (COINBASE)</span>
+          <div className="dv-profile-row">
+            <strong>{walletAddress ? shortAddress(walletAddress) : "Not connected"}</strong>
+            {walletAddress ? <button type="button" onClick={onChangeWallet}>Change</button> : <button type="button" onClick={onConnectWallet}>Connect</button>}
+          </div>
+          {walletAddress ? <button type="button" className="dv-wallet-disconnect" onClick={onDisconnectWallet}>Disconnect</button> : null}
+          {walletError ? <p className="dv-inline-error">{walletError}</p> : null}
         </div>
         <div className="dv-vault-card">
           <span>VAULT STATUS</span>
@@ -594,10 +786,14 @@ function MobileSettings({
   securityAlerts,
   biometricUnlock,
   sessionTimeout,
+  walletAddress,
+  walletError,
   onToggleSecurityAlerts,
   onToggleBiometricUnlock,
   onToggleSessionTimeout,
-  onOpenAction,
+  onConnectWallet,
+  onChangeWallet,
+  onDisconnectWallet,
 }: SettingsProps) {
   return (
     <section className="dv-mobile-stack">
@@ -606,7 +802,9 @@ function MobileSettings({
 
       <div className="dv-profile-card">
         <span>ACCOUNT</span>
-        <div className="dv-profile-row"><strong>Vault Owner</strong><button type="button" onClick={() => onOpenAction("edit-account")}>Edit</button></div>
+        <div className="dv-profile-row"><strong>{walletAddress ? shortAddress(walletAddress) : "No Coinbase wallet"}</strong>{walletAddress ? <button type="button" onClick={onChangeWallet}>Change</button> : <button type="button" onClick={onConnectWallet}>Connect</button>}</div>
+        {walletAddress ? <button type="button" className="dv-wallet-disconnect" onClick={onDisconnectWallet}>Disconnect</button> : null}
+        {walletError ? <p className="dv-inline-error">{walletError}</p> : null}
       </div>
 
       <div className="dv-profile-card">
@@ -645,10 +843,14 @@ function DesktopSettings({
   securityAlerts,
   biometricUnlock,
   sessionTimeout,
+  walletAddress,
+  walletError,
   onToggleSecurityAlerts,
   onToggleBiometricUnlock,
   onToggleSessionTimeout,
-  onOpenAction,
+  onConnectWallet,
+  onChangeWallet,
+  onDisconnectWallet,
 }: SettingsProps) {
   return (
     <section className="dv-desktop-grid">
@@ -659,7 +861,9 @@ function DesktopSettings({
       <div className="dv-col-right dv-desktop-stack">
         <div className="dv-profile-card">
           <span>ACCOUNT</span>
-          <div className="dv-profile-row"><strong>Primary Identity</strong><button type="button" onClick={() => onOpenAction("manage-identity")}>Manage</button></div>
+          <div className="dv-profile-row"><strong>{walletAddress ? shortAddress(walletAddress) : "No Coinbase wallet"}</strong>{walletAddress ? <button type="button" onClick={onChangeWallet}>Change</button> : <button type="button" onClick={onConnectWallet}>Connect</button>}</div>
+          {walletAddress ? <button type="button" className="dv-wallet-disconnect" onClick={onDisconnectWallet}>Disconnect</button> : null}
+          {walletError ? <p className="dv-inline-error">{walletError}</p> : null}
         </div>
         <div className="dv-profile-card">
           <span>SECURITY CONTROLS</span>
