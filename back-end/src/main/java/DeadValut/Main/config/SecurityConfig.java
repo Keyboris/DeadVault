@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -16,7 +17,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -51,25 +51,38 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,  "/api/auth/nonce").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/verify").permitAll()
 
-                // Actuator health — public
+                // Actuator endpoints — ** is required to match /actuator/health, /actuator/info, etc.
+                .requestMatchers("/actuator", "/actuator/**").permitAll()
+
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+
+                // Allow Spring to show real errors instead of 403s!
+                .requestMatchers("/error").permitAll()
 
                 // Everything else requires a valid JWT
                 .anyRequest().authenticated()
             )
 
-            // Plug in JWT extraction before Spring's username/password filter
+            // Plug in JWT extraction before Spring's username/password filter.
+            // jwtAuthFilter() is NOT a @Bean — calling the method directly creates
+            // a plain instance that Spring Security owns. If it were a @Bean, Spring
+            // Boot's FilterRegistrationBean auto-detection would also register it as
+            // a raw servlet filter, causing it to execute twice per request.
             .addFilterBefore(jwtAuthFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
     /**
-     * Reads the Authorization: Bearer <token> header, validates the JWT,
-     * and injects the userId (UUID) as the authentication principal so that
-     * @AuthenticationPrincipal UUID userId works in every controller.
+     * NOT annotated with @Bean intentionally.
+     *
+     * Spring Boot auto-registers every OncePerRequestFilter bean as a servlet filter.
+     * If this were a @Bean it would run once outside the security chain (via the
+     * servlet container) AND once inside it (via addFilterBefore), corrupting the
+     * SecurityContext and causing permit-all rules to be ignored for some requests.
+     *
+     * By returning a plain instance here, only Spring Security manages its lifecycle.
      */
-    @Bean
     public OncePerRequestFilter jwtAuthFilter() {
         return new OncePerRequestFilter() {
             @Override
@@ -88,14 +101,14 @@ public class SecurityConfig {
 
                             UsernamePasswordAuthenticationToken auth =
                                 new UsernamePasswordAuthenticationToken(
-                                    userId,          // principal — injected via @AuthenticationPrincipal
-                                    null,            // credentials — not needed post-authentication
-                                    List.of()        // authorities — none required for this app
+                                    userId,   // principal — injected via @AuthenticationPrincipal
+                                    null,     // credentials — not needed post-authentication
+                                    List.of() // authorities — none required for this app
                                 );
                             SecurityContextHolder.getContext().setAuthentication(auth);
                         }
                     } catch (Exception ignored) {
-                        // Invalid token — SecurityContext stays empty → 403 downstream
+                        // Invalid/expired token — SecurityContext stays empty → 403 downstream
                     }
                 }
 
