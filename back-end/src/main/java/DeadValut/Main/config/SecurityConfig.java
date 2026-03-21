@@ -47,27 +47,36 @@ public class SecurityConfig {
             .httpBasic(AbstractHttpConfigurer::disable)
 
             .authorizeHttpRequests(auth -> auth
-                // SIWE auth endpoints — public
+                // ==========================================
+                // 🔓 PUBLIC ENDPOINTS (No Auth Required)
+                // ==========================================
+                
+                // 1. Authentication (SIWE)
                 .requestMatchers(HttpMethod.GET,  "/api/auth/nonce").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/verify").permitAll()
+                
+                // 2. Hackathon Testing (Free-form Solidity Generator)
+                .requestMatchers(HttpMethod.POST, "/api/contracts/generate").permitAll()
 
-                // Actuator endpoints — ** is required to match /actuator/health, /actuator/info, etc.
-                .requestMatchers("/actuator", "/actuator/**").permitAll()
+                // 3. Health & Monitoring
+                .requestMatchers("/actuator/**").permitAll()
 
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-
-                // Allow Spring to show real errors instead of 403s!
+                // 4. Global Error Handler (Prevents Spring from hiding 404s/500s behind a 403)
                 .requestMatchers("/error").permitAll()
 
-                // Everything else requires a valid JWT
+                // ==========================================
+                // 🔒 SECURED ENDPOINTS (Requires valid JWT)
+                // ==========================================
+                // This catch-all automatically secures the following from your API Ref:
+                // - POST /api/will
+                // - PUT  /api/will
+                // - POST /api/check-in
+                // - GET  /api/check-in/status
+                // - GET  /api/vault/balance
                 .anyRequest().authenticated()
             )
 
             // Plug in JWT extraction before Spring's username/password filter.
-            // jwtAuthFilter() is NOT a @Bean — calling the method directly creates
-            // a plain instance that Spring Security owns. If it were a @Bean, Spring
-            // Boot's FilterRegistrationBean auto-detection would also register it as
-            // a raw servlet filter, causing it to execute twice per request.
             .addFilterBefore(jwtAuthFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -75,12 +84,7 @@ public class SecurityConfig {
 
     /**
      * NOT annotated with @Bean intentionally.
-     *
      * Spring Boot auto-registers every OncePerRequestFilter bean as a servlet filter.
-     * If this were a @Bean it would run once outside the security chain (via the
-     * servlet container) AND once inside it (via addFilterBefore), corrupting the
-     * SecurityContext and causing permit-all rules to be ignored for some requests.
-     *
      * By returning a plain instance here, only Spring Security manages its lifecycle.
      */
     public OncePerRequestFilter jwtAuthFilter() {
