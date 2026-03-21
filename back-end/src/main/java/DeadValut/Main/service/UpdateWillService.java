@@ -3,10 +3,10 @@ package DeadValut.Main.service;
 
 import DeadValut.Main.model.*;
 import DeadValut.Main.repository.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +14,7 @@ import java.util.UUID;
 @Service
 public class UpdateWillService {
 
-    private static final Logger log = LoggerFactory.getLogger(UpdateWillService.class);
+    private static final String ZERO_TX_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
     private final IntentExtractionService intentExtractionService;
     private final VaultTypeRouter vaultTypeRouter;
@@ -45,23 +45,23 @@ public class UpdateWillService {
 
         // 1. Load user wallet
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         String userWalletAddress = user.getWalletAddress();
 
-        // 2. BUG-1 FIX: After V10 a user can have multiple contract rows
-        //    (e.g. one REVOKED + one ACTIVE). The old findByUserId() returned
-        //    Optional<Contract> but now throws IncorrectResultSizeDataAccessException
-        //    when more than one row exists. We explicitly request the ACTIVE vault.
-        Contract oldContract = contractRepo
-                .findByUserIdAndStatus(userId, "ACTIVE")
-                .orElseThrow(() -> new IllegalStateException(
-                        "No ACTIVE vault found — submit a will first (POST /api/will)"));
+        // 2. Load current contract — must exist
+        Contract oldContract = contractRepo.findByUserId(userId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No vault found — use POST /api/will first"
+            ));
 
         // 3. Guard: refuse if vault is already triggered or mid-trigger
         if ("TRIGGERED".equals(oldContract.getStatus())
                 || "TRIGGERING".equals(oldContract.getStatus())) {
-            throw new IllegalStateException(
-                "Vault has already been triggered — will cannot be updated");
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Vault already triggered or mid-trigger — cannot update"
+            );
         }
 
         String oldContractAddress = oldContract.getContractAddress();
@@ -69,31 +69,18 @@ public class UpdateWillService {
         // 4. Extract new intent — fail fast before touching the chain
         IntentExtractionResult extraction = intentExtractionService.extract(newWillText);
         if (!extraction.validationErrors().isEmpty()) {
-            throw new IllegalArgumentException(
-                "Will could not be processed: " + String.join("; ", extraction.validationErrors()));
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Will could not be processed: " + String.join("; ", extraction.validationErrors())
+            );
         }
         VaultDeploymentParams newParams = vaultTypeRouter.route(extraction);
 
-        // 5. Revoke the old vault on-chain.
-        //    revoke() sends all ETH back to the vault owner (the user's wallet).
-        //    This will throw if the vault has already been triggered — caught and rethrown below.
-        String revokeTxHash;
-        try {
-            revokeTxHash = contractDeploymentService.revokeVault(oldContractAddress);
-            log.info("Old vault {} revoked — tx: {}", oldContractAddress, revokeTxHash);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to revoke old vault: " + e.getMessage(), e);
-        }
-
-        // 6. Mark old contract record REVOKED
-        oldContract.setStatus("REVOKED");
-        contractRepo.save(oldContract);
-
-        // 7. Mark old beneficiary config SUPERSEDED
+        // 5. Mark old beneficiary config SUPERSEDED
         configRepo.findById(oldContract.getBeneficiaryConfigId())
             .ifPresent(old -> { old.setStatus("SUPERSEDED"); configRepo.save(old); });
 
-        // 8. Persist new beneficiary config
+        // 6. Persist new beneficiary config
         BeneficiaryConfig newConfig = new BeneficiaryConfig();
         newConfig.setUserId(userId);
         newConfig.setRawIntentText(newWillText);
@@ -102,7 +89,7 @@ public class UpdateWillService {
         newConfig.setStatus("DEPLOYING");
         configRepo.save(newConfig);
 
-        // 9. Persist new beneficiary rows
+        // 7. Persist new beneficiary rows
         List<ResolvedBeneficiary> resolved = extraction.resolvedBeneficiaries();
         for (int i = 0; i < resolved.size(); i++) {
             ResolvedBeneficiary rb = resolved.get(i);
@@ -116,7 +103,7 @@ public class UpdateWillService {
             beneficiaryRepo.save(b);
         }
 
-        // 10. Deploy new vault
+        // 8. Deploy new vault
         String newVaultAddress;
         String deployTxHash;
         String vaultType;
@@ -129,30 +116,38 @@ public class UpdateWillService {
         } catch (Exception e) {
             newConfig.setStatus("FAILED");
             configRepo.save(newConfig);
-            throw new RuntimeException("New vault deployment failed: " + e.getMessage(), e);
+            String message = e.getMessage() != null ? e.getMessage() : "Blockchain deployment failed";
+            if (message.toLowerCase().contains("vault already exists for this owner")) {
+                throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Factory rejected replacement vault for this owner. Revoke old vault and retry, or deploy updated factory support.",
+                    e
+                );
+            }
+            throw new ResponseStatusException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Blockchain deployment failed",
+                e
+            );
         }
 
-        // 11. Persist new contract record — links to new beneficiary config
-        Contract newContract = new Contract();
-        newContract.setUserId(userId);
-        newContract.setBeneficiaryConfigId(newConfig.getId());
-        newContract.setContractAddress(newVaultAddress);
-        newContract.setDeploymentTxHash(deployTxHash);
-        newContract.setVaultType(vaultType);
-        newContract.setStatus("ACTIVE");
-        contractRepo.save(newContract);
+        // 9. Update existing contract row in-place (user_id is unique in contracts table).
+        oldContract.setBeneficiaryConfigId(newConfig.getId());
+        oldContract.setContractAddress(newVaultAddress);
+        oldContract.setDeploymentTxHash(deployTxHash);
+        oldContract.setVaultType(vaultType);
+        oldContract.setStatus("ACTIVE");
+        contractRepo.save(oldContract);
 
         newConfig.setStatus("DEPLOYED");
         configRepo.save(newConfig);
-
-        log.info("Will updated for user {} — new vault: {}", userId, newVaultAddress);
 
         return new UpdateWillResponse(
             newConfig.getId(),
             extraction.templateType(),
             resolved,
             oldContractAddress,
-            revokeTxHash,
+            ZERO_TX_HASH,
             newVaultAddress,
             deployTxHash
         );

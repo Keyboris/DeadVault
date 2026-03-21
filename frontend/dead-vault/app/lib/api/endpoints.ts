@@ -2,11 +2,14 @@ import { apiFetch } from "./client";
 import type {
   CheckInResponse,
   CheckInStatusResponse,
+  ContractSummaryResponse,
   NonceResponse,
   SmartContractRequest,
   SmartContractResponse,
   TokenResponse,
+  UpdateWillResponse,
   VerifyRequest,
+  VaultBalanceResponse,
   WillRequest,
   WillResponse,
 } from "./types";
@@ -28,6 +31,26 @@ export function submitWill(payload: WillRequest): Promise<WillResponse> {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function updateWill(payload: WillRequest): Promise<UpdateWillResponse> {
+  return apiFetch<UpdateWillResponse>("/api/will", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getContracts(): Promise<ContractSummaryResponse[]> {
+  return apiFetch<ContractSummaryResponse[]>("/api/contracts");
+}
+
+export function getVaultBalance(tokens: string[] = []): Promise<VaultBalanceResponse> {
+  const query = new URLSearchParams();
+  for (const token of tokens) {
+    query.append("tokens", token);
+  }
+  const suffix = query.toString();
+  return apiFetch<VaultBalanceResponse>(`/api/vault/balance${suffix ? `?${suffix}` : ""}`);
 }
 
 export function checkIn(): Promise<CheckInResponse> {

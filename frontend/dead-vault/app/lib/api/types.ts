@@ -33,14 +33,59 @@ export type WillResponse = {
   deploymentTxHash: string;
 };
 
+export type UpdateWillResponse = {
+  newConfigId: string;
+  templateType: string;
+  beneficiaries: ResolvedBeneficiary[];
+  oldContractAddress: string;
+  revokeTxHash: string;
+  newContractAddress: string;
+  deploymentTxHash: string;
+};
+
+export type BeneficiarySummary = {
+  label: string;
+  walletAddress: string;
+  basisPoints: number;
+  condition: string;
+};
+
+export type ContractSummaryResponse = {
+  id: string;
+  contractAddress: string;
+  deploymentTxHash: string;
+  vaultType: string;
+  status: string;
+  deployedAt: string;
+  beneficiaries: BeneficiarySummary[];
+};
+
+export type TokenBalance = {
+  tokenAddress: string;
+  symbol: string;
+  balanceRaw: string;
+  balanceFormatted: string;
+  decimals: number;
+};
+
+export type VaultBalanceResponse = {
+  contractAddress: string;
+  ethBalanceWei: string;
+  ethBalanceEther: string;
+  tokens: TokenBalance[];
+};
+
 export type CheckInResponse = {
   nextDueAt: string;
   intervalDays: number;
 };
 
 export type CheckInStatusResponse = {
+  lastCheckInAt: string;
   nextDueAt: string;
-  daysRemaining: number;
+  secondsRemaining: number;
+  intervalDays: number;
+  gracePeriodDays: number;
   status: "ACTIVE" | "GRACE" | "TRIGGERED" | "REVOKED" | string;
 };
 

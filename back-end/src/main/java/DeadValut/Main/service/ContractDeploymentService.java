@@ -78,6 +78,8 @@ public class ContractDeploymentService {
         Web3j web3j = Web3j.build(new HttpService(rpcUrl));
         Credentials creds = Credentials.create(privateKey);
 
+        validateDeploymentContext(web3j);
+
         String encodedData;
         String vaultTypeName;
 
@@ -105,6 +107,26 @@ public class ContractDeploymentService {
 
         TransactionReceipt receipt = sendTransaction(web3j, creds, factoryAddress, encodedData);
         return new DeployResult(extractVaultAddress(receipt), receipt.getTransactionHash(), vaultTypeName);
+    }
+
+    private void validateDeploymentContext(Web3j web3j) throws Exception {
+        EthChainId chain = web3j.ethChainId().send();
+        long rpcChainId = chain.getChainId().longValue();
+        if (rpcChainId != chainId) {
+            throw new IllegalStateException(
+                "Configured chainId " + chainId + " does not match RPC chainId " + rpcChainId +
+                    " (rpc=" + rpcUrl + ")"
+            );
+        }
+
+        EthGetCode codeResponse = web3j.ethGetCode(factoryAddress, DefaultBlockParameterName.LATEST).send();
+        String code = codeResponse.getCode();
+        if (code == null || code.equals("0x") || code.equals("0x0")) {
+            throw new IllegalStateException(
+                "No contract code found at FACTORY_CONTRACT_ADDRESS=" + factoryAddress +
+                    " on rpc=" + rpcUrl + ". Deploy DMSFactory to this network and update env."
+            );
+        }
     }
 
     // ── ABI encoding helpers ──────────────────────────────────────────────────────────────────────

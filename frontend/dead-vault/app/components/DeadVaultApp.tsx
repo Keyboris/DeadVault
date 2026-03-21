@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { IconType } from "react-icons";
 import type { VaultContract } from "./authStorage";
-import { checkIn, getCheckInStatus, submitWill as submitWillRequest } from "@/app/lib/api/endpoints";
+import {
+  checkIn,
+  getCheckInStatus,
+  getContracts as getContractsRequest,
+  getVaultBalance,
+  submitWill as submitWillRequest,
+  updateWill as updateWillRequest,
+} from "@/app/lib/api/endpoints";
+import { ApiClientError } from "@/app/lib/api/client";
 import { DMS_TOKEN_STORAGE_KEY } from "@/app/lib/api/config";
+import type { ContractSummaryResponse } from "@/app/lib/api/types";
 import {
   FaArrowUpRightFromSquare,
   FaAt,
@@ -31,20 +40,21 @@ type ScreenName = "home" | "payment" | "address" | "settings";
 
 function formatCountdown(isoTime: string | null, currentMs: number): string {
   if (!isoTime) {
-    return "--:--:--";
+    return "00:00:00:00";
   }
 
   const target = new Date(isoTime).getTime();
   if (Number.isNaN(target)) {
-    return "--:--:--";
+    return "00:00:00:00";
   }
 
   const diffMs = Math.max(0, target - currentMs);
   const totalSeconds = Math.floor(diffMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return `${String(days).padStart(2, "0")}:${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function screenFromPath(pathname: string): ScreenName {
@@ -160,18 +170,12 @@ const desktopEvents: EventItem[] = [
 
 export function DeadVaultApp({
   initialWalletAddress = null,
-  contracts,
   onWalletAddressChange,
-  onCreateContract,
-  onDeleteContract,
   onDeleteAccount,
   onLogout,
 }: {
   initialWalletAddress?: string | null;
-  contracts: VaultContract[];
   onWalletAddressChange?: (walletAddress: string | null) => void;
-  onCreateContract: (title: string, content: string) => void;
-  onDeleteContract: (id: string) => void;
   onDeleteAccount: () => void;
   onLogout?: () => void;
 }) {
@@ -191,15 +195,79 @@ export function DeadVaultApp({
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [willError, setWillError] = useState("");
   const [isSubmittingWill, setIsSubmittingWill] = useState(false);
+  const [contracts, setContracts] = useState<VaultContract[]>([]);
+  const [isLoadingContracts, setIsLoadingContracts] = useState(false);
+  const [contractsError, setContractsError] = useState("");
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [statusError, setStatusError] = useState("");
   const [statusText, setStatusText] = useState("UNKNOWN");
+  const [contractStatus, setContractStatus] = useState("UNKNOWN");
+  const [vaultValueEth, setVaultValueEth] = useState("0");
+  const [vaultValueError, setVaultValueError] = useState("");
   const [nextDueAt, setNextDueAt] = useState<string | null>(null);
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
   const [clockTick, setClockTick] = useState(Date.now());
   const pathname = usePathname();
   const router = useRouter();
   const countdownText = formatCountdown(nextDueAt, clockTick);
+
+  const mapContractSummaryToVaultContract = (contract: ContractSummaryResponse): VaultContract => {
+    const primaryLabel = contract.beneficiaries[0]?.label ?? "No beneficiary labels";
+    const title = `${contract.vaultType} • ${shortAddress(contract.contractAddress)}`;
+    const content = `Status: ${contract.status}\nPrimary beneficiary: ${primaryLabel}\nContract: ${contract.contractAddress}\nTx: ${contract.deploymentTxHash}`;
+    return {
+      id: contract.id,
+      title,
+      content,
+      createdAt: contract.deployedAt,
+      updatedAt: contract.deployedAt,
+    };
+  };
+
+  const refreshContracts = useCallback(async () => {
+    const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
+    if (!token) {
+      setContracts([]);
+      setContractsError("Please sign in to load contracts.");
+      setIsLoadingContracts(false);
+      return;
+    }
+
+    setIsLoadingContracts(true);
+    try {
+      const response = await getContractsRequest();
+      const mapped = response.map(mapContractSummaryToVaultContract);
+      setContracts(mapped);
+      setContractsError("");
+      setContractStatus(response[0]?.status ?? "NO_VAULT");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Contract list is temporarily unavailable.";
+      setContractsError(message);
+      setContracts([]);
+      setContractStatus("UNAVAILABLE");
+    } finally {
+      setIsLoadingContracts(false);
+    }
+  }, []);
+
+  const refreshVaultValue = useCallback(async () => {
+    const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
+    if (!token) {
+      setVaultValueEth("0");
+      setVaultValueError("");
+      return;
+    }
+
+    try {
+      const balance = await getVaultBalance();
+      setVaultValueEth(balance.ethBalanceEther);
+      setVaultValueError("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Vault value unavailable.";
+      setVaultValueError(message);
+      setVaultValueEth("0");
+    }
+  }, []);
 
   const refreshCheckInStatus = async () => {
     const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
@@ -214,7 +282,8 @@ export function DeadVaultApp({
       setStatusText(status.status);
       setStatusError("");
       setNextDueAt(status.nextDueAt);
-      setDaysRemaining(status.daysRemaining);
+      const derivedDays = Math.max(0, Math.floor(status.secondsRemaining / 86400));
+      setDaysRemaining(derivedDays);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Check-in status is temporarily unavailable.";
       setStatusError(message);
@@ -274,11 +343,6 @@ export function DeadVaultApp({
       return;
     }
 
-    if (editingContractId) {
-      setWillError("Will update endpoint is not available yet. Create a new will instead.");
-      return;
-    }
-
     const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
     if (!token) {
       setWillError("Please sign in before creating a will.");
@@ -287,11 +351,18 @@ export function DeadVaultApp({
 
     setIsSubmittingWill(true);
     try {
-      const response = await submitWillRequest({ willText: trimmedContent });
-      const details = `${trimmedContent}\n\nContract: ${response.contractAddress}\nTemplate: ${response.templateType}\nTx: ${response.deploymentTxHash}`;
-      onCreateContract(trimmedTitle, details);
+      if (editingContractId) {
+        await updateWillRequest({ willText: trimmedContent });
+      } else {
+        await submitWillRequest({ willText: trimmedContent });
+      }
+      await refreshContracts();
       resetWillForm();
     } catch (error) {
+      if (editingContractId && error instanceof ApiClientError && (error.status === 404 || error.status === 405)) {
+        setWillError("Will update is not enabled on this backend yet. Create a new will or enable PUT /api/will.");
+        return;
+      }
       const message = error instanceof Error ? error.message : "Will submission failed. Please try again.";
       setWillError(message);
     } finally {
@@ -302,8 +373,12 @@ export function DeadVaultApp({
   const editContract = (contract: VaultContract) => {
     setEditingContractId(contract.id);
     setWillTitle(contract.title);
-    setWillContent(contract.content);
+    setWillContent("");
     setWillError("");
+  };
+
+  const handleDeleteContract = () => {
+    setWillError("Contract deletion is not available in the current API.");
   };
 
   const validateBaseNetwork = (chainId: string | null) => {
@@ -494,6 +569,18 @@ export function DeadVaultApp({
     return () => clearInterval(poll);
   }, []);
 
+  useEffect(() => {
+    void refreshContracts();
+  }, [refreshContracts]);
+
+  useEffect(() => {
+    void refreshVaultValue();
+    const poll = setInterval(() => {
+      void refreshVaultValue();
+    }, 45000);
+    return () => clearInterval(poll);
+  }, [refreshVaultValue]);
+
   return (
     <div className="dv-root">
       <header className="dv-topbar">
@@ -530,6 +617,9 @@ export function DeadVaultApp({
               contracts={contracts}
               countdownText={countdownText}
               checkInStatus={statusText}
+              contractStatus={contractStatus}
+              vaultValueEth={vaultValueEth}
+              vaultValueError={vaultValueError}
               daysRemaining={daysRemaining}
               willTitle={willTitle}
               willContent={willContent}
@@ -542,8 +632,10 @@ export function DeadVaultApp({
               onWillContentChange={setWillContent}
               onSubmitWill={submitWill}
               onEditContract={editContract}
-              onDeleteContract={onDeleteContract}
+              onDeleteContract={handleDeleteContract}
               onCancelEdit={resetWillForm}
+              contractsError={contractsError}
+              isLoadingContracts={isLoadingContracts}
             />
           ) : (
             <MobileDashboard
@@ -551,6 +643,9 @@ export function DeadVaultApp({
               contracts={contracts}
               countdownText={countdownText}
               checkInStatus={statusText}
+              contractStatus={contractStatus}
+              vaultValueEth={vaultValueEth}
+              vaultValueError={vaultValueError}
               daysRemaining={daysRemaining}
               willTitle={willTitle}
               willContent={willContent}
@@ -563,8 +658,10 @@ export function DeadVaultApp({
               onWillContentChange={setWillContent}
               onSubmitWill={submitWill}
               onEditContract={editContract}
-              onDeleteContract={onDeleteContract}
+              onDeleteContract={handleDeleteContract}
               onCancelEdit={resetWillForm}
+              contractsError={contractsError}
+              isLoadingContracts={isLoadingContracts}
             />
           )
         ) : null}
@@ -594,6 +691,7 @@ export function DeadVaultApp({
               privacyShield={privacyShield}
               walletAddress={walletAddress}
               walletError={walletError}
+              contractStatus={contractStatus}
               onToggleAuto={() => setAutoTrigger((v) => !v)}
               onTogglePrivacy={() => setPrivacyShield((v) => !v)}
               onOpenAction={openActionPage}
@@ -607,6 +705,7 @@ export function DeadVaultApp({
               privacyShield={privacyShield}
               walletAddress={walletAddress}
               walletError={walletError}
+              contractStatus={contractStatus}
               onToggleAuto={() => setAutoTrigger((v) => !v)}
               onTogglePrivacy={() => setPrivacyShield((v) => !v)}
               onOpenAction={openActionPage}
@@ -677,6 +776,9 @@ type DashboardProps = {
   contracts: VaultContract[];
   countdownText: string;
   checkInStatus: string;
+  contractStatus: string;
+  vaultValueEth: string;
+  vaultValueError: string;
   daysRemaining: number | null;
   willTitle: string;
   willContent: string;
@@ -689,8 +791,10 @@ type DashboardProps = {
   onWillContentChange: (value: string) => void;
   onSubmitWill: () => void;
   onEditContract: (contract: VaultContract) => void;
-  onDeleteContract: (id: string) => void;
+  onDeleteContract: () => void;
   onCancelEdit: () => void;
+  contractsError: string;
+  isLoadingContracts: boolean;
 };
 
 function MobileDashboard({
@@ -698,6 +802,9 @@ function MobileDashboard({
   contracts,
   countdownText,
   checkInStatus,
+  contractStatus,
+  vaultValueEth,
+  vaultValueError,
   daysRemaining,
   willTitle,
   willContent,
@@ -712,6 +819,8 @@ function MobileDashboard({
   onEditContract,
   onDeleteContract,
   onCancelEdit,
+  contractsError,
+  isLoadingContracts,
 }: DashboardProps) {
   return (
     <section className="dv-mobile-stack dv-dashboard-screen">
@@ -745,9 +854,18 @@ function MobileDashboard({
         <div className="dv-action-row">
           <div>
             <span>Wallet Balance</span>
-            <strong>Unavailable</strong>
+            <strong>{vaultValueEth} ETH</strong>
           </div>
           <FaChevronRight className="dv-icon-inline" aria-hidden="true" />
+        </div>
+        {vaultValueError ? <p className="dv-inline-error">{vaultValueError}</p> : null}
+
+        <div className="dv-action-row">
+          <div>
+            <span>Contract Status</span>
+            <strong>{contractStatus}</strong>
+          </div>
+          <FaCircleInfo className="dv-icon-inline" aria-hidden="true" />
         </div>
 
         <div className="dv-action-row">
@@ -774,6 +892,8 @@ function MobileDashboard({
         onEditContract={onEditContract}
         onDeleteContract={onDeleteContract}
         onCancelEdit={onCancelEdit}
+        contractsError={contractsError}
+        isLoadingContracts={isLoadingContracts}
       />
     </section>
   );
@@ -784,6 +904,9 @@ function DesktopDashboard({
   contracts,
   countdownText,
   checkInStatus,
+  contractStatus,
+  vaultValueEth,
+  vaultValueError,
   daysRemaining,
   willTitle,
   willContent,
@@ -798,6 +921,8 @@ function DesktopDashboard({
   onEditContract,
   onDeleteContract,
   onCancelEdit,
+  contractsError,
+  isLoadingContracts,
 }: DashboardProps) {
   return (
     <section className="dv-desktop-grid dv-dashboard-screen">
@@ -813,13 +938,15 @@ function DesktopDashboard({
           <div className="dv-balance-head">
             <div>
               <span>VAULT BALANCE</span>
-              <h3>Pending backend endpoint</h3>
+              <h3>{vaultValueEth} ETH</h3>
+              <span style={{ marginTop: "0.35rem", letterSpacing: "0.08em" }}>STATUS: {contractStatus}</span>
             </div>
             <div className="dv-chain-row">
               <button type="button" className={chain === "Ethereum" ? "is-selected" : ""} onClick={() => onSelectChain("Ethereum")}>Ethereum</button>
               <button type="button" className={chain === "Polygon" ? "is-selected" : ""} onClick={() => onSelectChain("Polygon")}>Polygon</button>
             </div>
           </div>
+          {vaultValueError ? <p className="dv-inline-error">{vaultValueError}</p> : null}
           <div className="dv-balance-actions">
             <button type="button" className="dv-btn-light" onClick={() => onOpenAction("withdraw-assets")}>Withdraw Assets</button>
             <button type="button" className="dv-fab" onClick={() => onOpenAction("create-vault-item")}>
@@ -868,6 +995,8 @@ function DesktopDashboard({
           onEditContract={onEditContract}
           onDeleteContract={onDeleteContract}
           onCancelEdit={onCancelEdit}
+          contractsError={contractsError}
+          isLoadingContracts={isLoadingContracts}
         />
       </div>
     </section>
@@ -885,8 +1014,10 @@ type WillSectionProps = {
   onWillContentChange: (value: string) => void;
   onSubmitWill: () => void;
   onEditContract: (contract: VaultContract) => void;
-  onDeleteContract: (id: string) => void;
+  onDeleteContract: () => void;
   onCancelEdit: () => void;
+  contractsError: string;
+  isLoadingContracts: boolean;
 };
 
 function WillSection({
@@ -902,6 +1033,8 @@ function WillSection({
   onEditContract,
   onDeleteContract,
   onCancelEdit,
+  contractsError,
+  isLoadingContracts,
 }: WillSectionProps) {
   return (
     <section className="dv-profile-card">
@@ -940,7 +1073,11 @@ function WillSection({
 
       <h3 className="dv-created-contracts-title">CREATED CONTRACTS</h3>
       <div className="dv-contract-list">
-        {contracts.length === 0 ? (
+        {isLoadingContracts ? (
+          <p className="dv-subcopy">Loading contracts...</p>
+        ) : contractsError ? (
+          <p className="dv-inline-error">{contractsError}</p>
+        ) : contracts.length === 0 ? (
           <p className="dv-subcopy">No contracts yet. Create your first will above.</p>
         ) : (
           contracts.map((contract) => (
@@ -952,7 +1089,7 @@ function WillSection({
               </div>
               <div className="dv-contract-item-actions">
                 <button type="button" onClick={() => onEditContract(contract)}>Edit</button>
-                <button type="button" className="is-danger" onClick={() => onDeleteContract(contract.id)}>Delete</button>
+                <button type="button" className="is-danger" onClick={onDeleteContract}>Unavailable</button>
               </div>
             </article>
           ))
@@ -1060,6 +1197,7 @@ type ProfileProps = {
   privacyShield: boolean;
   walletAddress: string | null;
   walletError: string;
+  contractStatus: string;
   onToggleAuto: () => void;
   onTogglePrivacy: () => void;
   onOpenAction: (slug: string) => void;
@@ -1084,7 +1222,7 @@ type SettingsProps = {
   onLogout?: () => void;
 };
 
-function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError, onToggleAuto, onTogglePrivacy, onOpenAction, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
+function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError, contractStatus, onToggleAuto, onTogglePrivacy, onOpenAction, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
   return (
     <section className="dv-mobile-stack">
       <h1 className="dv-hero-title">ADDRESS SETTINGS</h1>
@@ -1101,7 +1239,7 @@ function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError,
       <h2 className="dv-section-title">CONTRACT</h2>
       <div className="dv-vault-card">
         <span>VAULT STATUS</span>
-        <h3>ACTIVE</h3>
+        <h3>{contractStatus}</h3>
         <p>Heartbeat monitoring engaged</p>
       </div>
       <div className="dv-profile-card">
@@ -1147,7 +1285,7 @@ function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError,
   );
 }
 
-function DesktopProfile({ autoTrigger, privacyShield, walletAddress, walletError, onToggleAuto, onTogglePrivacy, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
+function DesktopProfile({ autoTrigger, privacyShield, walletAddress, walletError, contractStatus, onToggleAuto, onTogglePrivacy, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
   return (
     <section className="dv-desktop-grid">
       <div className="dv-col-left">
@@ -1166,7 +1304,7 @@ function DesktopProfile({ autoTrigger, privacyShield, walletAddress, walletError
         </div>
         <div className="dv-vault-card">
           <span>VAULT STATUS</span>
-          <h3>ACTIVE</h3>
+          <h3>{contractStatus}</h3>
         </div>
         <div className="dv-profile-card">
           <span>SECURITY PARAMETERS</span>

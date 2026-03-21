@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.91.3",
+    "@wagmi/chains": "^1.8.0",
     "animejs": "^3.2.2",
     "next": "16.2.0",
     "react": "19.2.4",
