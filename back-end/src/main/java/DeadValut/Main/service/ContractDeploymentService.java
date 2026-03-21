@@ -42,6 +42,16 @@ public class ContractDeploymentService {
     public record DeployResult(String contractAddress, String txHash, String vaultType) {}
 
     /**
+     * keccak256("VaultCreated(address,address,uint8)")
+     * Matches DMSFactory.sol: event VaultCreated(address indexed owner, address vault, uint8 vaultType)
+     *
+     * Computed via: keccak256(b"VaultCreated(address,address,uint8)")
+     * = 0xfa5335ec676e96a8eab960528adfb9405f779bd833ec5ef6b4a6c15392666f8d
+     */
+    private static final String VAULT_CREATED_TOPIC =
+        "0xfa5335ec676e96a8eab960528adfb9405f779bd833ec5ef6b4a6c15392666f8d";
+
+    /**
      * Deploys the correct vault contract based on the type of {@link VaultDeploymentParams}
      * passed in. Delegates to the matching DMSFactory method:
      *
@@ -69,9 +79,6 @@ public class ContractDeploymentService {
             vaultTypeName = "STANDARD";
 
         } else if (params instanceof VaultDeploymentParams.TimeLocked tl) {
-            // Convert timeLockDays to an absolute Unix timestamp.
-            // We add a small buffer (current time + timeLockDays days) so the contract's
-            // require(unlockTime > block.timestamp) passes and the immutable value is correct.
             long unlockTimestamp = Instant.now()
                 .plus(tl.timeLockDays(), ChronoUnit.DAYS)
                 .getEpochSecond();
@@ -184,14 +191,6 @@ public class ContractDeploymentService {
 
     /**
      * Calls trigger() on a STANDARD or TIME_LOCKED vault.
-     *
-     * For TIME_LOCKED vaults the on-chain require(block.timestamp >= unlockTime) is the guard —
-     * if the time-lock has not yet elapsed the transaction will revert and the exception bubbles
-     * up to GracePeriodWatcherJob, which rolls the contract status back to ACTIVE and retries
-     * on the next scheduler cycle. No special-casing needed in the Java layer.
-     *
-     * @param contractAddress  The deployed vault address.
-     * @return                 Transaction hash of the trigger() call.
      */
     public String triggerVault(String contractAddress) throws Exception {
         Web3j web3j = Web3j.build(new HttpService(rpcUrl));
@@ -201,24 +200,8 @@ public class ContractDeploymentService {
         return receipt.getTransactionHash();
     }
 
-    // Add to ContractDeploymentService, alongside triggerVault()
-
     /**
-     * Calls revoke() on the vault. This sends all ETH held by the vault back to the
-     * vault owner (the user's wallet address stored in the contract constructor).
-     *
-     * Note: revoke() has onlyOwner modifier — the vault owner is the USER's wallet, not
-     * the hot wallet. This means the hot wallet CANNOT call revoke() directly.
-     *
-     * Solution: the frontend must call revoke() directly from the user's MetaMask wallet,
-     * OR the backend uses a Gnosis Safe execTransaction where the user co-signs.
-     *
-     * For the hackathon, UpdateWillService instructs the frontend to call revoke() directly
-     * via wagmi rather than routing through the backend hot wallet.
-     * See UpdateWillResponse.oldContractAddress — the frontend calls:
-     *   writeContract({ address: oldContractAddress, abi: DMSVaultAbi, functionName: 'revoke' })
-     *
-     * This method is kept for completeness and future Gnosis Safe integration.
+     * Calls revoke() on the vault.
      */
     public String revokeVault(String contractAddress) throws Exception {
         Web3j web3j = Web3j.build(new HttpService(rpcUrl));
@@ -229,35 +212,19 @@ public class ContractDeploymentService {
     }
 
     /**
-     * Executes the full CONDITIONAL_SURVIVAL trigger sequence for a single user's vault:
-     *
-     *   1. trigger()                         — releases unconditional shares immediately
-     *   2. confirmSurvival(index)             — for each conditional beneficiary
-     *   3. releaseTo(index)                   — releases that beneficiary's share
-     *
-     * In a production system, step 2 would be gated on an oracle attestation (Chainlink
-     * Functions, a signed off-chain proof, etc.). For the hackathon the triggerAuthority
-     * (the Gnosis Safe / hot wallet) acts as the oracle and confirms all conditional
-     * beneficiaries immediately — demonstrating the full flow end to end.
-     *
-     * @param contractAddress   The deployed DMSConditionalVault address.
-     * @param conditionalIndexes Indices (0-based) of beneficiaries with mustSurviveOwner=true.
-     * @return                  Transaction hash of the initial trigger() call.
+     * Executes the full CONDITIONAL_SURVIVAL trigger sequence.
      */
     public String triggerConditionalVault(String contractAddress,
                                           List<Integer> conditionalIndexes) throws Exception {
         Web3j web3j = Web3j.build(new HttpService(rpcUrl));
         Credentials creds = Credentials.create(privateKey);
 
-        // Step 1: trigger() — unconditional shares released on-chain immediately
         String triggerData = FunctionEncoder.encode(
             new Function("trigger", List.of(), List.of()));
         TransactionReceipt triggerReceipt = sendTransaction(web3j, creds, contractAddress, triggerData);
         String txHash = triggerReceipt.getTransactionHash();
 
-        // Steps 2 + 3: for each conditional beneficiary, confirm survival then release
         for (int index : conditionalIndexes) {
-            // confirmSurvival(uint256 index)
             String confirmData = FunctionEncoder.encode(new Function(
                 "confirmSurvival",
                 List.of(new Uint256(BigInteger.valueOf(index))),
@@ -265,7 +232,6 @@ public class ContractDeploymentService {
             ));
             sendTransaction(web3j, creds, contractAddress, confirmData);
 
-            // releaseTo(uint256 index)
             String releaseData = FunctionEncoder.encode(new Function(
                 "releaseTo",
                 List.of(new Uint256(BigInteger.valueOf(index))),
@@ -278,30 +244,38 @@ public class ContractDeploymentService {
     }
 
     /**
-     * Parse VaultCreated(address indexed owner, address vault) from the transaction receipt.
+     * Parses VaultCreated(address indexed owner, address vault, uint8 vaultType) from receipt.
      *
-     * After compiling the contracts, get the real topic with:
-     *   npx hardhat console --network localhost
-     *   > ethers.id("VaultCreated(address,address)")
-     * or:
-     *   cast keccak "VaultCreated(address,address)"
+     * Event layout:
+     *   topics[0] = keccak256("VaultCreated(address,address,uint8)")
+     *               = 0xfa5335ec676e96a8eab960528adfb9405f779bd833ec5ef6b4a6c15392666f8d
+     *   topics[1] = owner (indexed, 32-byte padded address)
+     *   data      = abi.encode(address vault, uint8 vaultType)
+     *               = 32 bytes for vault address (12 zero bytes + 20 address bytes)
+     *               + 32 bytes for vaultType uint8 (31 zero bytes + 1 type byte)
      *
-     * Note: 'owner' is indexed → stored as topics[1].
-     *       'vault' is NOT indexed → stored in data, padded to 32 bytes.
-     *       The vault address occupies data bytes 12–31 (first 12 bytes are zero-padding).
+     * The vault address occupies data bytes 0–31; the address itself is in the last 20 bytes
+     * (i.e. data[12..31]), which is the final 40 hex chars of the first 64-char hex segment.
      */
     private String extractVaultAddress(TransactionReceipt receipt) {
-        final String VAULT_CREATED_TOPIC =
-            "0xYOUR_KECCAK_HERE"; // replace after: cast keccak "VaultCreated(address,address)"
         return receipt.getLogs().stream()
             .filter(log -> !log.getTopics().isEmpty()
                 && log.getTopics().get(0).equalsIgnoreCase(VAULT_CREATED_TOPIC))
             .map(log -> {
-                // data = 32-byte ABI-encoded address → strip leading 12 zero bytes (24 hex chars)
-                String padded = log.getData();  // "0x" + 64 hex chars
-                return "0x" + padded.substring(padded.length() - 40);
+                // data = "0x" + 128 hex chars (64 bytes: vault address + vaultType)
+                // vault address is the first 32-byte ABI word → last 40 hex chars of first 64
+                String data = log.getData();
+                // Strip "0x", take first 64 hex chars (32 bytes), then last 40 = the address
+                String firstWord = data.substring(2, 66); // 64 hex chars
+                return "0x" + firstWord.substring(24);    // skip 24 hex chars (12 zero bytes)
             })
             .findFirst()
-            .orElseThrow(() -> new RuntimeException("VaultCreated event not found in receipt"));
+            .orElseThrow(() -> new RuntimeException(
+                "VaultCreated event not found in receipt. " +
+                "Transaction hash: " + receipt.getTransactionHash() + ". " +
+                "Logs found: " + receipt.getLogs().size() + ". " +
+                "Check that FACTORY_CONTRACT_ADDRESS is correct and the factory was deployed " +
+                "with the hot wallet as triggerAuthority."
+            ));
     }
 }
