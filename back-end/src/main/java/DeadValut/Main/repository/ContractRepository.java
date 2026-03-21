@@ -10,19 +10,25 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface ContractRepository extends JpaRepository<Contract, UUID> {
 
+    /** Returns the single ACTIVE (or TRIGGERING) vault for a user. */
     Optional<Contract> findByUserId(UUID userId);
 
+    /** Returns ALL contracts for a user across all statuses — used by ContractQueryService. */
+    List<Contract> findAllByUserId(UUID userId);
+
     /**
-     * Optimistic lock — atomically flips ACTIVE → TRIGGERING for exactly one row.
-     * Returns 1 if the update happened (safe to proceed), 0 if already TRIGGERING/TRIGGERED
-     * (another scheduler node got there first — skip this user).
+     * Returns all contracts for a user whose status is NOT the given value.
+     * Typical call: findAllByUserIdAndStatusNot(userId, "REVOKED") to exclude old vaults.
      */
+    List<Contract> findAllByUserIdAndStatusNot(UUID userId, String status);
+
     @Modifying
     @Transactional
     @Query("UPDATE Contract c SET c.status = 'TRIGGERING' " +
@@ -42,11 +48,6 @@ public interface ContractRepository extends JpaRepository<Contract, UUID> {
     void setTriggered(@Param("userId") UUID userId,
                       @Param("triggeredAt") Instant triggeredAt);
 
-    /**
-     * Overload used by GracePeriodWatcherJob which also passes the trigger tx hash.
-     * The tx hash is recorded in switch_events metadata rather than the contracts table
-     * (the schema stores it in switch_events.metadata JSONB), so this just delegates.
-     */
     default void setTriggered(UUID userId, String txHash, Instant triggeredAt) {
         setTriggered(userId, triggeredAt);
     }

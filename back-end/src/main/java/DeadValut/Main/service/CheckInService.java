@@ -15,11 +15,12 @@ import java.util.UUID;
 public class CheckInService {
 
     private final CheckInConfigRepository configRepo;
-    private final SwitchEventRepository eventRepo;
+    private final SwitchEventRepository   eventRepo;
 
-    public CheckInService(CheckInConfigRepository configRepo, SwitchEventRepository eventRepo) {
+    public CheckInService(CheckInConfigRepository configRepo,
+                          SwitchEventRepository eventRepo) {
         this.configRepo = configRepo;
-        this.eventRepo = eventRepo;
+        this.eventRepo  = eventRepo;
     }
 
     @Transactional
@@ -37,10 +38,29 @@ public class CheckInService {
         return new CheckInResponse(config.getNextDueAt(), config.getIntervalDays());
     }
 
+    /**
+     * Returns the full status needed by the frontend countdown clock.
+     *
+     *   lastCheckInAt   → clock starts here
+     *   nextDueAt       → clock expires here
+     *   secondsRemaining → precise countdown (negative = overdue)
+     *   intervalDays    → total period length for the progress ring
+     *   gracePeriodDays → warn threshold — clock turns orange below this
+     *   status          → ACTIVE | GRACE | TRIGGERED | REVOKED
+     */
     public CheckInStatusResponse getStatus(UUID userId) {
         CheckInConfig config = configRepo.findByUserId(userId)
-            .orElseThrow(() -> new RuntimeException("No config found"));
-        long daysLeft = Instant.now().until(config.getNextDueAt(), ChronoUnit.DAYS);
-        return new CheckInStatusResponse(config.getNextDueAt(), daysLeft, config.getStatus());
+            .orElseThrow(() -> new RuntimeException("No check-in config found for user"));
+
+        long secondsRemaining = ChronoUnit.SECONDS.between(Instant.now(), config.getNextDueAt());
+
+        return new CheckInStatusResponse(
+                config.getLastCheckInAt(),
+                config.getNextDueAt(),
+                secondsRemaining,
+                config.getIntervalDays(),
+                config.getGracePeriodDays(),
+                config.getStatus()
+        );
     }
 }
