@@ -194,10 +194,7 @@ export function DeadVaultShell() {
   return (
     <DeadVaultApp
       initialWalletAddress={profile.walletAddress}
-      contracts={profile.contracts}
       onWalletAddressChange={handleWalletAddressChange}
-      onCreateContract={handleCreateContract}
-      onDeleteContract={handleDeleteContract}
       onDeleteAccount={handleDeleteAccount}
       onLogout={handleLogout}
     />
