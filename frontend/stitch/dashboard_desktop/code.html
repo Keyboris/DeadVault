@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DeadVault | The Existential Ledger</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-secondary-fixed-variant": "#0033c0",
+                        "surface-container-highest": "#e2e2e2",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-primary-fixed": "#1b1b1b",
+                        "outline-variant": "#c4c5da",
+                        "on-background": "#1b1b1b",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#dadada",
+                        "on-secondary-fixed": "#001257",
+                        "on-primary-fixed-variant": "#474747",
+                        "primary-fixed": "#e2e2e2",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#dbdbdb",
+                        "inverse-primary": "#c6c6c6",
+                        "background": "#f9f9f9",
+                        "surface-tint": "#5e5e5e",
+                        "secondary-fixed": "#dde1ff",
+                        "secondary-container": "#0448ff",
+                        "primary-container": "#606060",
+                        "on-tertiary-container": "#dbdbdb",
+                        "on-secondary": "#ffffff",
+                        "tertiary": "#474949",
+                        "outline": "#747688",
+                        "surface-container-high": "#e8e8e8",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "surface-container-low": "#f3f3f3",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#434657",
+                        "surface-container": "#eeeeee",
+                        "secondary-fixed-dim": "#b9c3ff",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "primary": "#484848",
+                        "on-surface": "#1b1b1b",
+                        "surface-bright": "#f9f9f9",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#f9f9f9",
+                        "surface-variant": "#e2e2e2",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#5f6061",
+                        "secondary": "#0035c6",
+                        "inverse-on-surface": "#f1f1f1",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#d6daff",
+                        "inverse-surface": "#303030"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Manrope"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #f9f9f9;
+            color: #1b1b1b;
+            font-family: 'Manrope', sans-serif;
+            overflow-x: hidden;
+        }
+        .space-grotesk { font-family: 'Space Grotesk', sans-serif; }
+        .manrope { font-family: 'Manrope', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface">
+<!-- TopNavBar -->
+<nav class="bg-white dark:bg-zinc-950 flex justify-between items-center w-full px-12 py-6 max-w-none docked full-width top-0 z-50">
+<div class="text-2xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-50 uppercase font-headline">
+            DeadVault
+        </div>
+<div class="hidden md:flex items-center gap-12">
+<a class="text-zinc-900 dark:text-zinc-50 font-bold border-b-2 border-blue-600 font-headline font-light tracking-tighter hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="#">Home</a>
+<a class="text-zinc-500 dark:text-zinc-400 font-medium font-headline font-light tracking-tighter hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="#">Wallet</a>
+<a class="text-zinc-500 dark:text-zinc-400 font-medium font-headline font-light tracking-tighter hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="#">Address</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-zinc-900 dark:text-zinc-50 p-2 hover:bg-surface-container rounded-full transition-colors">
+                account_balance_wallet
+            </button>
+</div>
+</nav>
+<main class="min-h-screen pt-24 pb-32 px-12 max-w-[1440px] mx-auto">
+<div class="grid grid-cols-12 gap-12 items-start mt-20">
+<!-- Left Side: Hero & Countdown -->
+<div class="col-span-12 lg:col-span-7 flex flex-col gap-24">
+<section class="flex flex-col gap-8">
+<div class="flex flex-col">
+<span class="text-xs font-bold uppercase tracking-[0.3em] text-outline mb-4 manrope">COUNT DOWN TILL NEXT AUTH</span>
+<h1 class="text-[10rem] leading-none font-extralight tracking-tighter space-grotesk -ml-2">
+                            00:00:90
+                        </h1>
+</div>
+<div class="max-w-xl">
+<h2 class="text-7xl font-bold leading-[0.9] tracking-tighter uppercase space-grotesk text-on-background">
+                            MONEY HAS NO VALUE IN DEATH
+                        </h2>
+</div>
+</section>
+<!-- Vault/Blockchain Section -->
+<section class="bg-secondary-container rounded-xl p-12 text-on-secondary flex flex-col gap-10">
+<div class="flex justify-between items-end">
+<div class="flex flex-col gap-2">
+<span class="text-xs font-bold uppercase tracking-widest opacity-70 manrope">VAULT BALANCE</span>
+<div class="flex items-baseline gap-3">
+<span class="text-6xl font-medium tracking-tighter space-grotesk">12.45</span>
+<span class="text-2xl font-light opacity-80 space-grotesk">ETH</span>
+</div>
+</div>
+<div class="flex bg-white/10 rounded-full p-1 backdrop-blur-md">
+<button class="px-8 py-3 bg-white text-secondary-container rounded-full text-sm font-bold manrope uppercase tracking-wider">Ethereum</button>
+<button class="px-8 py-3 text-white rounded-full text-sm font-bold manrope uppercase tracking-wider hover:bg-white/5 transition-colors">Polygon</button>
+</div>
+</div>
+<div class="flex gap-4">
+<button class="flex-1 bg-white text-secondary-container py-5 rounded-full font-bold manrope uppercase tracking-widest hover:bg-surface-container-low transition-colors text-center">
+                            Withdraw Assets
+                        </button>
+<button class="w-20 h-20 flex items-center justify-center bg-white/10 border border-white/20 rounded-full hover:bg-white/20 transition-all">
+<span class="material-symbols-outlined text-white text-3xl">add</span>
+</button>
+</div>
+</section>
+</div>
+<!-- Right Side: Dark Contract Panel -->
+<div class="col-span-12 lg:col-span-5 flex flex-col gap-8 sticky top-32">
+<div class="bg-[#0a0a0a] text-white rounded-xl p-10 flex flex-col gap-10 min-h-[600px] shadow-2xl">
+<div class="flex justify-between items-center">
+<span class="text-xs font-bold uppercase tracking-widest text-zinc-500 manrope">NEW SMART CONTRACT</span>
+<div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+</div>
+<div class="flex flex-col gap-8 flex-grow">
+<div class="space-y-4">
+<label class="text-zinc-500 text-xs font-bold uppercase tracking-widest manrope">RECIPIENT ADDRESS</label>
+<input class="w-full bg-zinc-900 border-none rounded-full py-5 px-8 text-zinc-100 placeholder:text-zinc-700 focus:ring-1 focus:ring-secondary-container manrope font-medium" placeholder="0x0000...dead" type="text"/>
+</div>
+<div class="space-y-4">
+<label class="text-zinc-500 text-xs font-bold uppercase tracking-widest manrope">INSTRUCTIONAL LEGACY</label>
+<div class="relative">
+<textarea class="w-full bg-zinc-900 border-none rounded-xl py-6 px-8 text-zinc-100 placeholder:text-zinc-700 focus:ring-1 focus:ring-secondary-container manrope font-medium resize-none" placeholder="Define the final distribution of digital consciousness..." rows="6"></textarea>
+<button class="absolute bottom-4 right-4 w-12 h-12 bg-secondary-container rounded-full flex items-center justify-center hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-white">mic</span>
+</button>
+</div>
+</div>
+</div>
+<button class="w-full bg-white text-black py-6 rounded-full font-extrabold manrope uppercase tracking-[0.2em] text-sm hover:bg-zinc-200 transition-colors">
+                        EXECUTE PERMANENCE
+                    </button>
+<p class="text-[10px] text-center text-zinc-600 manrope uppercase tracking-widest leading-relaxed">
+                        THIS ACTION CANNOT BE REVERSED ONCE THE HEARTBEAT SENSOR REACHES TERMINAL STATE.
+                    </p>
+</div>
+<!-- Subtle Status Card -->
+<div class="bg-surface-container-low rounded-xl p-8 flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-green-500/10 text-green-600 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<div>
+<p class="text-sm font-bold manrope uppercase tracking-wider">Vault Integrity</p>
+<p class="text-xs text-outline manrope">Encryption Level: Quantum Proof</p>
+</div>
+</div>
+<span class="text-xs font-bold space-grotesk text-zinc-400">99.9%</span>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<div class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-8 items-center bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-full px-8 py-4 w-auto min-w-[320px] shadow-[0_40px_60px_-15px_rgba(0,0,0,0.06)]">
+<button class="flex flex-col items-center justify-center bg-blue-600 text-white rounded-full p-3 scale-95 duration-150 hover:scale-105 transition-transform duration-300">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-['Manrope'] text-[10px] uppercase tracking-widest font-bold mt-1 hidden">Dashboard</span>
+</button>
+<button class="flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-500 p-3 hover:scale-105 transition-transform duration-300">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="font-['Manrope'] text-[10px] uppercase tracking-widest font-bold mt-1 hidden">Notifications</span>
+</button>
+<button class="flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-500 p-3 hover:scale-105 transition-transform duration-300">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Manrope'] text-[10px] uppercase tracking-widest font-bold mt-1 hidden">Profile</span>
+</button>
+</div>
+<!-- Decorative Text Background -->
+<div class="fixed top-1/2 -right-24 -translate-y-1/2 rotate-90 opacity-[0.02] pointer-events-none select-none">
+<span class="text-[20rem] font-bold space-grotesk tracking-tighter uppercase whitespace-nowrap">MEMENTO VIVERE</span>
+</div>
+</body></html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DeadVault - Mobile Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-fixed": "#dde1ff",
+              "on-surface-variant": "#434657",
+              "on-primary-fixed-variant": "#474747",
+              "on-tertiary-fixed": "#1a1c1c",
+              "secondary-container": "#0448ff",
+              "surface-container-highest": "#e2e2e2",
+              "error-container": "#ffdad6",
+              "surface-variant": "#e2e2e2",
+              "outline": "#747688",
+              "tertiary-fixed": "#e2e2e2",
+              "tertiary-fixed-dim": "#c6c6c7",
+              "surface-container-high": "#e8e8e8",
+              "secondary-fixed-dim": "#b9c3ff",
+              "primary": "#484848",
+              "on-tertiary-fixed-variant": "#454747",
+              "on-secondary-fixed": "#001257",
+              "on-secondary-fixed-variant": "#0033c0",
+              "on-error-container": "#93000a",
+              "on-tertiary": "#ffffff",
+              "surface-bright": "#f9f9f9",
+              "surface": "#f9f9f9",
+              "surface-tint": "#5e5e5e",
+              "error": "#ba1a1a",
+              "background": "#f9f9f9",
+              "on-primary-container": "#dbdbdb",
+              "on-background": "#1b1b1b",
+              "inverse-surface": "#303030",
+              "surface-container-low": "#f3f3f3",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary-container": "#d6daff",
+              "tertiary-container": "#5f6061",
+              "on-primary-fixed": "#1b1b1b",
+              "surface-container": "#eeeeee",
+              "primary-fixed-dim": "#c6c6c6",
+              "tertiary": "#474949",
+              "outline-variant": "#c4c5da",
+              "on-surface": "#1b1b1b",
+              "on-error": "#ffffff",
+              "on-secondary": "#ffffff",
+              "primary-container": "#606060",
+              "surface-dim": "#dadada",
+              "secondary": "#0035c6",
+              "inverse-primary": "#c6c6c6",
+              "inverse-on-surface": "#f1f1f1",
+              "primary-fixed": "#e2e2e2",
+              "on-primary": "#ffffff",
+              "on-tertiary-container": "#dbdbdb"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Manrope"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body min-h-screen pb-32">
+<!-- TopAppBar -->
+<nav class="flex justify-between items-center w-full px-8 py-6 bg-neutral-50 dark:bg-neutral-950 docked full-width top-0 z-40">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-blue-600 dark:text-blue-500" data-icon="lock">lock</span>
+<span class="text-xl font-bold tracking-tighter text-neutral-900 dark:text-neutral-50 font-['Space_Grotesk']">DeadVault</span>
+</div>
+<button class="hover:opacity-80 transition-opacity Active: scale-95 duration-100">
+<span class="material-symbols-outlined text-neutral-500 dark:text-neutral-400" data-icon="menu">menu</span>
+</button>
+</nav>
+<main class="px-8 flex flex-col gap-20">
+<!-- Countdown Section -->
+<section class="flex flex-col items-center justify-center pt-12">
+<h2 class="font-headline text-7xl md:text-8xl font-light tracking-[-0.05em] text-on-surface">00:00:90</h2>
+<p class="font-label text-[10px] tracking-[0.3em] uppercase mt-4 text-on-surface-variant font-medium">COUNT DOWN TILL NEXT AUTH</p>
+</section>
+<!-- Existential Statement -->
+<section class="max-w-[300px]">
+<h1 class="font-headline font-bold text-5xl leading-[0.9] tracking-tighter text-on-surface">
+                MONEY<br/>HAS NO<br/>VALUE IN<br/>DEATH
+            </h1>
+</section>
+<!-- Contract Input Card -->
+<section>
+<div class="bg-primary p-8 rounded-xl flex flex-col gap-6">
+<div class="flex justify-between items-center">
+<span class="font-headline font-bold text-on-primary text-sm tracking-widest uppercase">CONTRACT</span>
+<span class="material-symbols-outlined text-on-primary opacity-60" data-icon="info">info</span>
+</div>
+<div class="relative">
+<textarea class="w-full bg-primary-container/30 border-none rounded-lg p-6 text-on-primary placeholder:text-on-primary/40 focus:ring-0 resize-none font-body text-sm h-32" placeholder="This is user prompt to make a smart contract..."></textarea>
+<button class="absolute bottom-4 right-4 bg-on-primary text-primary w-12 h-12 rounded-full flex items-center justify-center hover:scale-105 transition-transform">
+<span class="material-symbols-outlined" data-icon="mic">mic</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Vault Card -->
+<section>
+<div class="bg-secondary-container p-8 rounded-xl flex flex-col gap-8 shadow-2xl">
+<div class="flex items-center gap-4">
+<div class="bg-on-secondary/10 px-4 py-2 rounded-full flex items-center gap-2">
+<span class="material-symbols-outlined text-xs" data-icon="token" data-weight="fill" style="font-variation-settings: 'FILL' 1;">token</span>
+<span class="font-headline font-bold text-xs tracking-tight text-on-secondary">Ethereum</span>
+</div>
+<div class="bg-white/5 px-4 py-2 rounded-full">
+<span class="font-headline font-medium text-xs tracking-tight text-on-secondary opacity-40">Polygon</span>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Action Blocks -->
+<div class="bg-on-secondary/5 rounded-lg p-5 flex justify-between items-center group cursor-pointer hover:bg-on-secondary/10 transition-colors">
+<div class="flex flex-col gap-1">
+<span class="text-[10px] uppercase tracking-widest text-on-secondary/50 font-bold">Wallet Balance</span>
+<span class="font-headline text-2xl font-bold text-on-secondary">12.45 ETH</span>
+</div>
+<span class="material-symbols-outlined text-on-secondary" data-icon="arrow_forward_ios">arrow_forward_ios</span>
+</div>
+<div class="bg-on-secondary/5 rounded-lg p-5 flex justify-between items-center group cursor-pointer hover:bg-on-secondary/10 transition-colors">
+<div class="flex flex-col gap-1">
+<span class="text-[10px] uppercase tracking-widest text-on-secondary/50 font-bold">Next Distribution</span>
+<span class="font-headline text-lg font-bold text-on-secondary">Oct 24, 2025</span>
+</div>
+<span class="material-symbols-outlined text-on-secondary" data-icon="schedule">schedule</span>
+</div>
+<div class="mt-4">
+<button class="w-full bg-on-secondary text-secondary-container font-headline font-bold py-5 rounded-full hover:opacity-90 transition-opacity Active: scale-95 duration-100">
+                            MANAGE VAULT
+                        </button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center gap-8 px-6 py-2 bg-neutral-50/80 dark:bg-neutral-900/80 backdrop-blur-xl fixed bottom-6 left-1/2 -translate-x-1/2 w-[auto] min-w-[280px] rounded-full shadow-[0_40px_60px_-15px_rgba(0,0,0,0.06)]">
+<!-- Active Tab: Dashboard -->
+<a class="flex items-center justify-center bg-blue-600 text-white rounded-full p-4 Active: scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard" data-weight="fill" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+</a>
+<a class="flex items-center justify-center text-neutral-500 dark:text-neutral-400 p-4 hover:text-blue-500 dark:hover:text-blue-300 transition-colors Active: scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</a>
+<a class="flex items-center justify-center text-neutral-500 dark:text-neutral-400 p-4 hover:text-blue-500 dark:hover:text-blue-300 transition-colors Active: scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+</a>
+</nav>
+<!-- Visual Artifact for High-End Editorial Feel -->
+<div class="fixed top-0 right-0 w-32 h-screen opacity-5 pointer-events-none overflow-hidden select-none">
+<div class="rotate-90 origin-top-left translate-x-full whitespace-nowrap text-[120px] font-headline font-black text-primary leading-none">
+            LEGACY LEDGER LEGACY LEDGER
+        </div>
+</div>
+</body></html>
