@@ -33,6 +33,33 @@ export type WillResponse = {
   deploymentTxHash: string;
 };
 
+export type UpdateWillResponse = {
+  newConfigId: string;
+  templateType: string;
+  beneficiaries: ResolvedBeneficiary[];
+  oldContractAddress: string;
+  revokeTxHash: string;
+  newContractAddress: string;
+  deploymentTxHash: string;
+};
+
+export type BeneficiarySummary = {
+  label: string;
+  walletAddress: string;
+  basisPoints: number;
+  condition: string;
+};
+
+export type ContractSummaryResponse = {
+  id: string;
+  contractAddress: string;
+  deploymentTxHash: string;
+  vaultType: string;
+  status: string;
+  deployedAt: string;
+  beneficiaries: BeneficiarySummary[];
+};
+
 export type CheckInResponse = {
   nextDueAt: string;
   intervalDays: number;
