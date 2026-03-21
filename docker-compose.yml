@@ -19,7 +19,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dms
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dms?stringtype=unspecified
       SPRING_DATASOURCE_USERNAME: dms
       SPRING_DATASOURCE_PASSWORD: dms
       OPENAI_API_KEY: ${OPENAI_API_KEY}

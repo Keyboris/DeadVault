@@ -6,10 +6,8 @@ import DeadValut.Main.repository.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,6 +23,7 @@ public class UpdateWillService {
     private final BeneficiaryRepository beneficiaryRepo;
     private final ContractRepository contractRepo;
     private final UserRepository userRepository;
+    private final TransactionTemplate tx;
 
     public UpdateWillService(IntentExtractionService intentExtractionService,
                              VaultTypeRouter vaultTypeRouter,
@@ -32,7 +31,8 @@ public class UpdateWillService {
                              BeneficiaryConfigRepository configRepo,
                              BeneficiaryRepository beneficiaryRepo,
                              ContractRepository contractRepo,
-                             UserRepository userRepository) {
+                             UserRepository userRepository,
+                             TransactionTemplate tx) {
         this.intentExtractionService = intentExtractionService;
         this.vaultTypeRouter         = vaultTypeRouter;
         this.contractDeploymentService = contractDeploymentService;
@@ -40,9 +40,9 @@ public class UpdateWillService {
         this.beneficiaryRepo         = beneficiaryRepo;
         this.contractRepo            = contractRepo;
         this.userRepository          = userRepository;
+        this.tx                      = tx;
     }
 
-    @Transactional
     public UpdateWillResponse updateWill(UUID userId, String newWillText) {
 
         // 1. Load user wallet
@@ -55,11 +55,12 @@ public class UpdateWillService {
             .orElseThrow(() -> new IllegalStateException(
                 "No vault found — submit a will first (POST /api/will)"));
 
-        // 3. Guard: refuse if vault is already triggered or mid-trigger
+        // 3. Guard: refuse if vault is already triggered, mid-trigger, or revoked
         if ("TRIGGERED".equals(oldContract.getStatus())
-                || "TRIGGERING".equals(oldContract.getStatus())) {
+                || "TRIGGERING".equals(oldContract.getStatus())
+                || "REVOKED".equals(oldContract.getStatus())) {
             throw new IllegalStateException(
-                "Vault has already been triggered — will cannot be updated");
+                "Vault status is " + oldContract.getStatus() + " — will cannot be updated");
         }
 
         String oldContractAddress = oldContract.getContractAddress();
@@ -72,9 +73,7 @@ public class UpdateWillService {
         }
         VaultDeploymentParams newParams = vaultTypeRouter.route(extraction);
 
-        // 5. Revoke the old vault on-chain.
-        //    revoke() sends all ETH back to the vault owner (the user's wallet).
-        //    This will throw if the vault has already been triggered — caught and rethrown below.
+        // 5. Revoke the old vault on-chain (irreversible)
         String revokeTxHash;
         try {
             revokeTxHash = contractDeploymentService.revokeVault(oldContractAddress);
@@ -83,38 +82,41 @@ public class UpdateWillService {
             throw new RuntimeException("Failed to revoke old vault: " + e.getMessage(), e);
         }
 
-        // 6. Mark old contract record REVOKED
-        oldContract.setStatus("REVOKED");
-        contractRepo.save(oldContract);
+        // 6. Mark old contract REVOKED + old config SUPERSEDED (committed immediately
+        //    so DB reflects the on-chain state even if later steps fail)
+        tx.executeWithoutResult(status -> {
+            oldContract.setStatus("REVOKED");
+            contractRepo.save(oldContract);
+            configRepo.findById(oldContract.getBeneficiaryConfigId())
+                .ifPresent(old -> { old.setStatus("SUPERSEDED"); configRepo.save(old); });
+        });
 
-        // 7. Mark old beneficiary config SUPERSEDED
-        configRepo.findById(oldContract.getBeneficiaryConfigId())
-            .ifPresent(old -> { old.setStatus("SUPERSEDED"); configRepo.save(old); });
-
-        // 8. Persist new beneficiary config
-        BeneficiaryConfig newConfig = new BeneficiaryConfig();
-        newConfig.setUserId(userId);
-        newConfig.setRawIntentText(newWillText);
-        newConfig.setTemplateType(extraction.templateType());
-        newConfig.setConfidenceScore(extraction.confidenceScore());
-        newConfig.setStatus("DEPLOYING");
-        configRepo.save(newConfig);
-
-        // 9. Persist new beneficiary rows
+        // 7. Persist new beneficiary config + rows
         List<ResolvedBeneficiary> resolved = extraction.resolvedBeneficiaries();
-        for (int i = 0; i < resolved.size(); i++) {
-            ResolvedBeneficiary rb = resolved.get(i);
-            Beneficiary b = new Beneficiary();
-            b.setConfigId(newConfig.getId());
-            b.setPosition(i);
-            b.setWalletAddress(rb.walletAddress());
-            b.setBasisPoints(rb.basisPoints());
-            b.setLabel(rb.name());
-            b.setCondition(rb.condition());
-            beneficiaryRepo.save(b);
-        }
+        BeneficiaryConfig newConfig = tx.execute(status -> {
+            BeneficiaryConfig c = new BeneficiaryConfig();
+            c.setUserId(userId);
+            c.setRawIntentText(newWillText);
+            c.setTemplateType(extraction.templateType());
+            c.setConfidenceScore(extraction.confidenceScore());
+            c.setStatus("DEPLOYING");
+            configRepo.save(c);
 
-        // 10. Deploy new vault
+            for (int i = 0; i < resolved.size(); i++) {
+                ResolvedBeneficiary rb = resolved.get(i);
+                Beneficiary b = new Beneficiary();
+                b.setConfigId(c.getId());
+                b.setPosition(i);
+                b.setWalletAddress(rb.walletAddress());
+                b.setBasisPoints(rb.basisPoints());
+                b.setLabel(rb.name());
+                b.setCondition(rb.condition());
+                beneficiaryRepo.save(b);
+            }
+            return c;
+        });
+
+        // 8. Deploy new vault
         String newVaultAddress;
         String deployTxHash;
         String vaultType;
@@ -125,23 +127,25 @@ public class UpdateWillService {
             deployTxHash    = result.txHash();
             vaultType       = result.vaultType();
         } catch (Exception e) {
-            newConfig.setStatus("FAILED");
-            configRepo.save(newConfig);
+            tx.executeWithoutResult(status -> {
+                newConfig.setStatus("FAILED");
+                configRepo.save(newConfig);
+            });
             throw new RuntimeException("New vault deployment failed: " + e.getMessage(), e);
         }
 
-        // 11. Persist new contract record — links to new beneficiary config
-        Contract newContract = new Contract();
-        newContract.setUserId(userId);
-        newContract.setBeneficiaryConfigId(newConfig.getId());
-        newContract.setContractAddress(newVaultAddress);
-        newContract.setDeploymentTxHash(deployTxHash);
-        newContract.setVaultType(vaultType);
-        newContract.setStatus("ACTIVE");
-        contractRepo.save(newContract);
+        // 9. Update existing contract record (user_id has UNIQUE constraint)
+        tx.executeWithoutResult(status -> {
+            oldContract.setBeneficiaryConfigId(newConfig.getId());
+            oldContract.setContractAddress(newVaultAddress);
+            oldContract.setDeploymentTxHash(deployTxHash);
+            oldContract.setVaultType(vaultType);
+            oldContract.setStatus("ACTIVE");
+            contractRepo.save(oldContract);
 
-        newConfig.setStatus("DEPLOYED");
-        configRepo.save(newConfig);
+            newConfig.setStatus("DEPLOYED");
+            configRepo.save(newConfig);
+        });
 
         log.info("Will updated for user {} — new vault: {}", userId, newVaultAddress);
 
