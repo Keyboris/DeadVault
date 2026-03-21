@@ -201,6 +201,33 @@ public class ContractDeploymentService {
         return receipt.getTransactionHash();
     }
 
+    // Add to ContractDeploymentService, alongside triggerVault()
+
+    /**
+     * Calls revoke() on the vault. This sends all ETH held by the vault back to the
+     * vault owner (the user's wallet address stored in the contract constructor).
+     *
+     * Note: revoke() has onlyOwner modifier — the vault owner is the USER's wallet, not
+     * the hot wallet. This means the hot wallet CANNOT call revoke() directly.
+     *
+     * Solution: the frontend must call revoke() directly from the user's MetaMask wallet,
+     * OR the backend uses a Gnosis Safe execTransaction where the user co-signs.
+     *
+     * For the hackathon, UpdateWillService instructs the frontend to call revoke() directly
+     * via wagmi rather than routing through the backend hot wallet.
+     * See UpdateWillResponse.oldContractAddress — the frontend calls:
+     *   writeContract({ address: oldContractAddress, abi: DMSVaultAbi, functionName: 'revoke' })
+     *
+     * This method is kept for completeness and future Gnosis Safe integration.
+     */
+    public String revokeVault(String contractAddress) throws Exception {
+        Web3j web3j = Web3j.build(new HttpService(rpcUrl));
+        Credentials creds = Credentials.create(privateKey);
+        String data = FunctionEncoder.encode(new Function("revoke", List.of(), List.of()));
+        TransactionReceipt receipt = sendTransaction(web3j, creds, contractAddress, data);
+        return receipt.getTransactionHash();
+    }
+
     /**
      * Executes the full CONDITIONAL_SURVIVAL trigger sequence for a single user's vault:
      *
