@@ -39,6 +39,13 @@ public class ContractDeploymentService {
     @Value("${dms.blockchain.gas-limit}")
     private long gasLimit;
 
+    @jakarta.annotation.PostConstruct
+    void logConfig() {
+        org.slf4j.LoggerFactory.getLogger(ContractDeploymentService.class)
+            .info("ContractDeploymentService initialized — factory: {}, rpc: {}, chainId: {}",
+                factoryAddress, rpcUrl, chainId);
+    }
+
     public record DeployResult(String contractAddress, String txHash, String vaultType) {}
 
     /**
