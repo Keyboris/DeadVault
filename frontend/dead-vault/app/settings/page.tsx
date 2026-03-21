@@ -1,5 +1,5 @@
-import { DeadVaultApp } from "../components/DeadVaultApp";
+import { DeadVaultShell } from "../components/DeadVaultShell";
 
 export default function SettingsPage() {
-  return <DeadVaultApp />;
+  return <DeadVaultShell />;
 }

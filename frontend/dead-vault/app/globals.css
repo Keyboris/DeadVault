@@ -180,6 +180,134 @@ body {
   padding: 2rem 2.25rem 8rem;
 }
 
+.dv-auth-wrap {
+  min-height: calc(100dvh - 8rem);
+  display: grid;
+  place-items: center;
+}
+
+.dv-auth-shell {
+  width: min(880px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.dv-auth-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.dv-auth-stepper span {
+  border-radius: 999px;
+  background: var(--surface-high);
+  color: var(--outline);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+  padding: 0.45rem 0.65rem;
+}
+
+.dv-auth-stepper span.is-active {
+  background: var(--secondary-container);
+  color: #fff;
+}
+
+.dv-auth-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.dv-auth-grid--account {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+.dv-auth-grid--account label {
+  margin: 0;
+}
+
+.dv-auth-grid label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--outline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dv-auth-input {
+  border: 1px solid var(--surface-highest);
+  border-radius: 0.8rem;
+  background: #fff;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--foreground);
+  padding: 0.7rem 0.85rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.dv-auth-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.10rem;
+}
+
+.dv-auth-actions > span {
+  width: 5rem;
+}
+
+.dv-auth-skip {
+  border: 0;
+  background: transparent;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.dv-auth-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dv-auth-list li {
+  border-radius: 0.8rem;
+  background: var(--surface-low);
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.dv-auth-list li p {
+  margin-top: 0.1rem;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+.dv-auth-list li button {
+  border: 0;
+  background: transparent;
+  color: #b91c1c;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .dv-mobile-stack,
 .dv-desktop-stack {
   display: flex;
@@ -395,7 +523,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.13em;
-  padding: 1rem 1.1rem;
+  transition: transform 150ms ease, box-shadow 180ms ease, opacity 150ms ease;
 }
 
 .dv-btn-primary {
@@ -412,6 +540,39 @@ body {
   background: #fff;
   color: var(--secondary-container);
   flex: 1;
+}
+
+.dv-btn-primary:hover,
+.dv-btn-light:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(4, 72, 255, 0.18);
+}
+
+.dv-btn-primary:disabled,
+.dv-btn-light:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
+  box-shadow: none;
+}
+
+.dv-auth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.dv-auth-btn-icon {
+  font-size: 0.95rem;
+}
+
+.dv-auth-btn-label {
+  line-height: 1;
+}
+
+.dv-auth-btn--brand {
+  background: linear-gradient(145deg, #ffffff 0%, #edf2ff 100%);
 }
 
 .dv-balance-head {
@@ -564,6 +725,107 @@ body {
   margin-bottom: 0.9rem;
 }
 
+.dv-contract-label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--outline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.75rem;
+}
+
+.dv-contract-editor {
+  width: 100%;
+  min-height: 7rem;
+  border: 1px solid var(--surface-highest);
+  border-radius: 0.8rem;
+  background: #fff;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--foreground);
+  padding: 0.8rem 0.9rem;
+  resize: vertical;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.dv-contract-actions {
+  display: flex;
+  gap: 0.7rem;
+  margin-top: 0.2rem;
+}
+
+.dv-created-contracts-title {
+  margin-top: 1.15rem;
+  margin-bottom: 0.6rem;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.dv-contract-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.dv-contract-item {
+  border-radius: 1rem;
+  background: var(--surface-low);
+  padding: 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.dv-contract-item h4 {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.dv-contract-item p {
+  margin-top: 0.35rem;
+  color: var(--text-soft);
+  font-size: 0.87rem;
+  line-height: 1.35;
+}
+
+.dv-contract-item span {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: var(--outline);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dv-contract-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.dv-contract-item-actions button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-highest);
+  color: #1f2937;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+}
+
+.dv-contract-item-actions button.is-danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .dv-section-title {
   font-family: "Space Grotesk", sans-serif;
   font-size: clamp(2rem, 6vw, 2.9rem);
@@ -602,11 +864,13 @@ body {
 .dv-wallet-disconnect {
   margin-top: 0.65rem;
   border: 0;
-  background: transparent;
+  background: #fee2e2;
   color: #991b1b;
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.03em;
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
   cursor: pointer;
 }
 
@@ -882,6 +1146,15 @@ body {
     padding: 3.4rem 2.8rem 10rem;
   }
 
+  .dv-auth-grid--account {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 1rem;
+  }
+
+  .dv-auth-grid--account label:last-child {
+    grid-column: 1 / -1;
+  }
+
   .dv-desktop-grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 0.92fr);
     gap: 3rem;
@@ -935,5 +1208,22 @@ body {
   .dv-notification-callout,
   .dv-status-card {
     display: none;
+  }
+
+  .dv-auth-grid--account {
+    grid-template-columns: 1fr;
+  }
+
+  .dv-contract-actions {
+    flex-direction: column;
+  }
+
+  .dv-contract-item {
+    flex-direction: column;
+  }
+
+  .dv-contract-item-actions {
+    flex-direction: row;
+    justify-content: flex-end;
   }
 }

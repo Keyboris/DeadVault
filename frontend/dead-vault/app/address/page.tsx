@@ -1,5 +1,5 @@
-import { DeadVaultApp } from "../components/DeadVaultApp";
+import { DeadVaultShell } from "../components/DeadVaultShell";
 
 export default function AddressPage() {
-  return <DeadVaultApp />;
+  return <DeadVaultShell />;
 }

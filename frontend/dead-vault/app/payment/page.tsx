@@ -1,5 +1,5 @@
-import { DeadVaultApp } from "../components/DeadVaultApp";
+import { DeadVaultShell } from "../components/DeadVaultShell";
 
 export default function PaymentPage() {
-  return <DeadVaultApp />;
+  return <DeadVaultShell />;
 }

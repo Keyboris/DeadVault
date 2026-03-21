@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { IconType } from "react-icons";
+import type { VaultContract } from "./authStorage";
+import { checkIn, getCheckInStatus, submitWill as submitWillRequest } from "@/app/lib/api/endpoints";
+import { DMS_TOKEN_STORAGE_KEY } from "@/app/lib/api/config";
 import {
   FaArrowUpRightFromSquare,
   FaAt,
@@ -25,6 +28,24 @@ import {
 } from "react-icons/fa6";
 
 type ScreenName = "home" | "payment" | "address" | "settings";
+
+function formatCountdown(isoTime: string | null, currentMs: number): string {
+  if (!isoTime) {
+    return "--:--:--";
+  }
+
+  const target = new Date(isoTime).getTime();
+  if (Number.isNaN(target)) {
+    return "--:--:--";
+  }
+
+  const diffMs = Math.max(0, target - currentMs);
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 function screenFromPath(pathname: string): ScreenName {
   if (pathname.startsWith("/settings")) {
@@ -137,7 +158,23 @@ const desktopEvents: EventItem[] = [
   },
 ];
 
-export function DeadVaultApp() {
+export function DeadVaultApp({
+  initialWalletAddress = null,
+  contracts,
+  onWalletAddressChange,
+  onCreateContract,
+  onDeleteContract,
+  onDeleteAccount,
+  onLogout,
+}: {
+  initialWalletAddress?: string | null;
+  contracts: VaultContract[];
+  onWalletAddressChange?: (walletAddress: string | null) => void;
+  onCreateContract: (title: string, content: string) => void;
+  onDeleteContract: (id: string) => void;
+  onDeleteAccount: () => void;
+  onLogout?: () => void;
+}) {
   const [screen, setScreen] = useState<ScreenName>("home");
   const [desktop, setDesktop] = useState(false);
   const [autoTrigger, setAutoTrigger] = useState(true);
@@ -146,11 +183,68 @@ export function DeadVaultApp() {
   const [biometricUnlock, setBiometricUnlock] = useState(false);
   const [sessionTimeout, setSessionTimeout] = useState(true);
   const [chain, setChain] = useState<ChainName>("Ethereum");
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(initialWalletAddress);
   const [walletChainId, setWalletChainId] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string>("");
+  const [willTitle, setWillTitle] = useState("");
+  const [willContent, setWillContent] = useState("");
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
+  const [willError, setWillError] = useState("");
+  const [isSubmittingWill, setIsSubmittingWill] = useState(false);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [statusText, setStatusText] = useState("UNKNOWN");
+  const [nextDueAt, setNextDueAt] = useState<string | null>(null);
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+  const [clockTick, setClockTick] = useState(Date.now());
   const pathname = usePathname();
   const router = useRouter();
+  const countdownText = formatCountdown(nextDueAt, clockTick);
+
+  const refreshCheckInStatus = async () => {
+    const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
+    if (!token) {
+      setStatusText("UNAUTHENTICATED");
+      setStatusError("Please sign in to load check-in status.");
+      return;
+    }
+
+    try {
+      const status = await getCheckInStatus();
+      setStatusText(status.status);
+      setStatusError("");
+      setNextDueAt(status.nextDueAt);
+      setDaysRemaining(status.daysRemaining);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Check-in status is temporarily unavailable.";
+      setStatusError(message);
+      setStatusText("UNAVAILABLE");
+      setNextDueAt(null);
+      setDaysRemaining(null);
+    }
+  };
+
+  const handleCheckIn = async () => {
+    const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
+    if (!token) {
+      setStatusError("Please sign in before checking in.");
+      return;
+    }
+
+    setIsCheckingIn(true);
+    try {
+      const response = await checkIn();
+      setNextDueAt(response.nextDueAt);
+      setStatusText("ACTIVE");
+      setStatusError("");
+      await refreshCheckInStatus();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Check-in failed. Please try again.";
+      setStatusError(message);
+    } finally {
+      setIsCheckingIn(false);
+    }
+  };
 
   const navigateToScreen = (nextScreen: ScreenName) => {
     setScreen(nextScreen);
@@ -162,6 +256,54 @@ export function DeadVaultApp() {
 
   const openActionPage = (slug: string) => {
     navigateWithTransition(router.push, `/action/${slug}`);
+  };
+
+  const resetWillForm = () => {
+    setEditingContractId(null);
+    setWillTitle("");
+    setWillContent("");
+    setWillError("");
+  };
+
+  const submitWill = async () => {
+    const trimmedTitle = willTitle.trim();
+    const trimmedContent = willContent.trim();
+
+    if (!trimmedTitle || !trimmedContent) {
+      setWillError("Will title and content are required.");
+      return;
+    }
+
+    if (editingContractId) {
+      setWillError("Will update endpoint is not available yet. Create a new will instead.");
+      return;
+    }
+
+    const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
+    if (!token) {
+      setWillError("Please sign in before creating a will.");
+      return;
+    }
+
+    setIsSubmittingWill(true);
+    try {
+      const response = await submitWillRequest({ willText: trimmedContent });
+      const details = `${trimmedContent}\n\nContract: ${response.contractAddress}\nTemplate: ${response.templateType}\nTx: ${response.deploymentTxHash}`;
+      onCreateContract(trimmedTitle, details);
+      resetWillForm();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Will submission failed. Please try again.";
+      setWillError(message);
+    } finally {
+      setIsSubmittingWill(false);
+    }
+  };
+
+  const editContract = (contract: VaultContract) => {
+    setEditingContractId(contract.id);
+    setWillTitle(contract.title);
+    setWillContent(contract.content);
+    setWillError("");
   };
 
   const validateBaseNetwork = (chainId: string | null) => {
@@ -249,6 +391,14 @@ export function DeadVaultApp() {
   }, [pathname]);
 
   useEffect(() => {
+    setWalletAddress(initialWalletAddress);
+  }, [initialWalletAddress]);
+
+  useEffect(() => {
+    onWalletAddressChange?.(walletAddress);
+  }, [walletAddress, onWalletAddressChange]);
+
+  useEffect(() => {
     async function loadExistingCoinbaseSession() {
       const provider = getEthereumProvider();
       if (!provider || !provider.isCoinbaseWallet) {
@@ -329,6 +479,21 @@ export function DeadVaultApp() {
     };
   }, [screen, desktop]);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setClockTick(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    refreshCheckInStatus();
+    const poll = setInterval(() => {
+      void refreshCheckInStatus();
+    }, 30000);
+    return () => clearInterval(poll);
+  }, []);
+
   return (
     <div className="dv-root">
       <header className="dv-topbar">
@@ -360,17 +525,65 @@ export function DeadVaultApp() {
       <main className="dv-main dv-screen">
         {screen === "home" ? (
           desktop ? (
-            <DesktopDashboard chain={chain} onSelectChain={setChain} onOpenAction={openActionPage} />
+            <DesktopDashboard
+              chain={chain}
+              contracts={contracts}
+              countdownText={countdownText}
+              checkInStatus={statusText}
+              daysRemaining={daysRemaining}
+              willTitle={willTitle}
+              willContent={willContent}
+              willError={willError}
+              isSubmittingWill={isSubmittingWill}
+              editingContractId={editingContractId}
+              onSelectChain={setChain}
+              onOpenAction={openActionPage}
+              onWillTitleChange={setWillTitle}
+              onWillContentChange={setWillContent}
+              onSubmitWill={submitWill}
+              onEditContract={editContract}
+              onDeleteContract={onDeleteContract}
+              onCancelEdit={resetWillForm}
+            />
           ) : (
-            <MobileDashboard chain={chain} onSelectChain={setChain} onOpenAction={openActionPage} />
+            <MobileDashboard
+              chain={chain}
+              contracts={contracts}
+              countdownText={countdownText}
+              checkInStatus={statusText}
+              daysRemaining={daysRemaining}
+              willTitle={willTitle}
+              willContent={willContent}
+              willError={willError}
+              isSubmittingWill={isSubmittingWill}
+              editingContractId={editingContractId}
+              onSelectChain={setChain}
+              onOpenAction={openActionPage}
+              onWillTitleChange={setWillTitle}
+              onWillContentChange={setWillContent}
+              onSubmitWill={submitWill}
+              onEditContract={editContract}
+              onDeleteContract={onDeleteContract}
+              onCancelEdit={resetWillForm}
+            />
           )
         ) : null}
 
         {screen === "payment" ? (
           desktop ? (
-            <DesktopNotifications />
+            <DesktopNotifications
+              statusText={statusText}
+              statusError={statusError}
+              isCheckingIn={isCheckingIn}
+              onCheckIn={handleCheckIn}
+            />
           ) : (
-            <MobileNotifications />
+            <MobileNotifications
+              statusText={statusText}
+              statusError={statusError}
+              isCheckingIn={isCheckingIn}
+              onCheckIn={handleCheckIn}
+            />
           )
         ) : null}
 
@@ -418,6 +631,8 @@ export function DeadVaultApp() {
               onConnectWallet={connectCoinbaseWallet}
               onChangeWallet={changeCoinbaseWallet}
               onDisconnectWallet={disconnectCoinbaseWallet}
+              onLogout={onLogout}
+              onDeleteAccount={onDeleteAccount}
             />
           ) : (
             <MobileSettings
@@ -432,6 +647,8 @@ export function DeadVaultApp() {
               onConnectWallet={connectCoinbaseWallet}
               onChangeWallet={changeCoinbaseWallet}
               onDisconnectWallet={disconnectCoinbaseWallet}
+              onLogout={onLogout}
+              onDeleteAccount={onDeleteAccount}
             />
           )
         ) : null}
@@ -457,16 +674,51 @@ export function DeadVaultApp() {
 
 type DashboardProps = {
   chain: ChainName;
+  contracts: VaultContract[];
+  countdownText: string;
+  checkInStatus: string;
+  daysRemaining: number | null;
+  willTitle: string;
+  willContent: string;
+  willError: string;
+  isSubmittingWill: boolean;
+  editingContractId: string | null;
   onSelectChain: (chain: ChainName) => void;
   onOpenAction: (slug: string) => void;
+  onWillTitleChange: (value: string) => void;
+  onWillContentChange: (value: string) => void;
+  onSubmitWill: () => void;
+  onEditContract: (contract: VaultContract) => void;
+  onDeleteContract: (id: string) => void;
+  onCancelEdit: () => void;
 };
 
-function MobileDashboard({ chain, onSelectChain, onOpenAction }: DashboardProps) {
+function MobileDashboard({
+  chain,
+  contracts,
+  countdownText,
+  checkInStatus,
+  daysRemaining,
+  willTitle,
+  willContent,
+  willError,
+  isSubmittingWill,
+  editingContractId,
+  onSelectChain,
+  onOpenAction,
+  onWillTitleChange,
+  onWillContentChange,
+  onSubmitWill,
+  onEditContract,
+  onDeleteContract,
+  onCancelEdit,
+}: DashboardProps) {
   return (
     <section className="dv-mobile-stack dv-dashboard-screen">
       <div className="dv-countdown-wrap">
-        <h2 className="dv-countdown">00:00:90</h2>
+        <h2 className="dv-countdown">{countdownText}</h2>
         <p className="dv-label">COUNT DOWN TILL NEXT AUTH</p>
+        <p className="dv-subcopy">Status: {checkInStatus}{daysRemaining !== null ? ` (${daysRemaining}d)` : ""}</p>
       </div>
 
       <h1 className="dv-hero-title">MONEY HAS NO VALUE IN DEATH</h1>
@@ -493,7 +745,7 @@ function MobileDashboard({ chain, onSelectChain, onOpenAction }: DashboardProps)
         <div className="dv-action-row">
           <div>
             <span>Wallet Balance</span>
-            <strong>12.45 ETH</strong>
+            <strong>Unavailable</strong>
           </div>
           <FaChevronRight className="dv-icon-inline" aria-hidden="true" />
         </div>
@@ -501,24 +753,59 @@ function MobileDashboard({ chain, onSelectChain, onOpenAction }: DashboardProps)
         <div className="dv-action-row">
           <div>
             <span>Next Distribution</span>
-            <strong>Oct 24, 2025</strong>
+            <strong>From check-in status</strong>
           </div>
           <FaClock className="dv-icon-inline" aria-hidden="true" />
         </div>
 
         <button type="button" className="dv-btn-primary" onClick={() => onOpenAction("manage-vault")}>MANAGE VAULT</button>
       </div>
+
+      <WillSection
+        contracts={contracts}
+        willTitle={willTitle}
+        willContent={willContent}
+        willError={willError}
+        isSubmittingWill={isSubmittingWill}
+        editingContractId={editingContractId}
+        onWillTitleChange={onWillTitleChange}
+        onWillContentChange={onWillContentChange}
+        onSubmitWill={onSubmitWill}
+        onEditContract={onEditContract}
+        onDeleteContract={onDeleteContract}
+        onCancelEdit={onCancelEdit}
+      />
     </section>
   );
 }
 
-function DesktopDashboard({ chain, onSelectChain, onOpenAction }: DashboardProps) {
+function DesktopDashboard({
+  chain,
+  contracts,
+  countdownText,
+  checkInStatus,
+  daysRemaining,
+  willTitle,
+  willContent,
+  willError,
+  isSubmittingWill,
+  editingContractId,
+  onSelectChain,
+  onOpenAction,
+  onWillTitleChange,
+  onWillContentChange,
+  onSubmitWill,
+  onEditContract,
+  onDeleteContract,
+  onCancelEdit,
+}: DashboardProps) {
   return (
     <section className="dv-desktop-grid dv-dashboard-screen">
       <div className="dv-col-left">
         <div>
           <p className="dv-label">COUNT DOWN TILL NEXT AUTH</p>
-          <h2 className="dv-countdown dv-desktop-count">00:00:90</h2>
+          <h2 className="dv-countdown dv-desktop-count">{countdownText}</h2>
+          <p className="dv-subcopy">Status: {checkInStatus}{daysRemaining !== null ? ` (${daysRemaining}d)` : ""}</p>
         </div>
         <h1 className="dv-hero-title dv-desktop-hero">MONEY HAS NO VALUE IN DEATH</h1>
 
@@ -526,7 +813,7 @@ function DesktopDashboard({ chain, onSelectChain, onOpenAction }: DashboardProps
           <div className="dv-balance-head">
             <div>
               <span>VAULT BALANCE</span>
-              <h3>12.45 ETH</h3>
+              <h3>Pending backend endpoint</h3>
             </div>
             <div className="dv-chain-row">
               <button type="button" className={chain === "Ethereum" ? "is-selected" : ""} onClick={() => onSelectChain("Ethereum")}>Ethereum</button>
@@ -568,16 +855,136 @@ function DesktopDashboard({ chain, onSelectChain, onOpenAction }: DashboardProps
           </div>
           <strong>99.9%</strong>
         </div>
+        <WillSection
+          contracts={contracts}
+          willTitle={willTitle}
+          willContent={willContent}
+          willError={willError}
+          isSubmittingWill={isSubmittingWill}
+          editingContractId={editingContractId}
+          onWillTitleChange={onWillTitleChange}
+          onWillContentChange={onWillContentChange}
+          onSubmitWill={onSubmitWill}
+          onEditContract={onEditContract}
+          onDeleteContract={onDeleteContract}
+          onCancelEdit={onCancelEdit}
+        />
       </div>
     </section>
   );
 }
 
-function MobileNotifications() {
+type WillSectionProps = {
+  contracts: VaultContract[];
+  willTitle: string;
+  willContent: string;
+  willError: string;
+  isSubmittingWill: boolean;
+  editingContractId: string | null;
+  onWillTitleChange: (value: string) => void;
+  onWillContentChange: (value: string) => void;
+  onSubmitWill: () => void;
+  onEditContract: (contract: VaultContract) => void;
+  onDeleteContract: (id: string) => void;
+  onCancelEdit: () => void;
+};
+
+function WillSection({
+  contracts,
+  willTitle,
+  willContent,
+  willError,
+  isSubmittingWill,
+  editingContractId,
+  onWillTitleChange,
+  onWillContentChange,
+  onSubmitWill,
+  onEditContract,
+  onDeleteContract,
+  onCancelEdit,
+}: WillSectionProps) {
+  return (
+    <section className="dv-profile-card">
+      <span>CREATE OR EDIT WILL</span>
+      <label className="dv-contract-label">
+        Will Title
+        <input
+          className="dv-auth-input"
+          type="text"
+          value={willTitle}
+          onChange={(event) => onWillTitleChange(event.target.value)}
+          placeholder="Family legacy plan"
+        />
+      </label>
+      <label className="dv-contract-label">
+        Will Content
+        <textarea
+          className="dv-contract-editor"
+          value={willContent}
+          onChange={(event) => onWillContentChange(event.target.value)}
+          placeholder="Define asset distribution, beneficiaries, and conditions..."
+        />
+      </label>
+      {willError ? <p className="dv-inline-error">{willError}</p> : null}
+      <div className="dv-contract-actions">
+        <button type="button" className="dv-btn-primary" onClick={onSubmitWill} disabled={isSubmittingWill}>
+          {editingContractId ? "Update Will" : "Create Will"}
+        </button>
+        {isSubmittingWill ? <p className="dv-subcopy">Submitting...</p> : null}
+        {editingContractId ? (
+          <button type="button" className="dv-btn-light" onClick={onCancelEdit}>
+            Cancel
+          </button>
+        ) : null}
+      </div>
+
+      <h3 className="dv-created-contracts-title">CREATED CONTRACTS</h3>
+      <div className="dv-contract-list">
+        {contracts.length === 0 ? (
+          <p className="dv-subcopy">No contracts yet. Create your first will above.</p>
+        ) : (
+          contracts.map((contract) => (
+            <article key={contract.id} className="dv-contract-item">
+              <div>
+                <h4>{contract.title}</h4>
+                <p>{contract.content}</p>
+                <span>Updated {new Date(contract.updatedAt).toLocaleString()}</span>
+              </div>
+              <div className="dv-contract-item-actions">
+                <button type="button" onClick={() => onEditContract(contract)}>Edit</button>
+                <button type="button" className="is-danger" onClick={() => onDeleteContract(contract.id)}>Delete</button>
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MobileNotifications({
+  statusText,
+  statusError,
+  isCheckingIn,
+  onCheckIn,
+}: {
+  statusText: string;
+  statusError: string;
+  isCheckingIn: boolean;
+  onCheckIn: () => void;
+}) {
   return (
     <section className="dv-mobile-stack">
       <h1 className="dv-hero-title">PAYMENT ACTIVITY</h1>
       <p className="dv-subcopy">Track every transfer and payment event tied to your legacy vault.</p>
+      <div className="dv-profile-card">
+        <span>CHECK-IN</span>
+        <p className="dv-subcopy">Current status: {statusText}</p>
+        {statusError ? <p className="dv-inline-error">{statusError}</p> : null}
+        <button type="button" className="dv-btn-primary" onClick={onCheckIn} disabled={isCheckingIn}>
+          {isCheckingIn ? "Checking In..." : "I'm Alive"}
+        </button>
+      </div>
       <div className="dv-list">
         {mobileEvents.map((event) => (
           <article key={event.title} className={`dv-event-item ${event.muted ? "is-muted" : ""}`}>
@@ -597,11 +1004,29 @@ function MobileNotifications() {
   );
 }
 
-function DesktopNotifications() {
+function DesktopNotifications({
+  statusText,
+  statusError,
+  isCheckingIn,
+  onCheckIn,
+}: {
+  statusText: string;
+  statusError: string;
+  isCheckingIn: boolean;
+  onCheckIn: () => void;
+}) {
   return (
     <section className="dv-desktop-stack">
       <h1 className="dv-hero-title dv-desktop-hero">PAYMENT ACTIVITY</h1>
       <p className="dv-subcopy dv-notification-callout">Track all outgoing and incoming payment events. Every entry is <span>immutable</span>.</p>
+      <div className="dv-profile-card">
+        <span>CHECK-IN</span>
+        <p className="dv-subcopy">Current status: {statusText}</p>
+        {statusError ? <p className="dv-inline-error">{statusError}</p> : null}
+        <button type="button" className="dv-btn-primary" onClick={onCheckIn} disabled={isCheckingIn}>
+          {isCheckingIn ? "Checking In..." : "I'm Alive"}
+        </button>
+      </div>
       <div className="dv-list">
         {desktopEvents.map((event) => (
           <article key={event.title} className="dv-event-item dv-event-item-lg">
@@ -655,6 +1080,8 @@ type SettingsProps = {
   onConnectWallet: () => void;
   onChangeWallet: () => void;
   onDisconnectWallet: () => void;
+  onDeleteAccount: () => void;
+  onLogout?: () => void;
 };
 
 function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError, onToggleAuto, onTogglePrivacy, onOpenAction, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
@@ -794,6 +1221,8 @@ function MobileSettings({
   onConnectWallet,
   onChangeWallet,
   onDisconnectWallet,
+  onDeleteAccount,
+  onLogout,
 }: SettingsProps) {
   return (
     <section className="dv-mobile-stack">
@@ -834,6 +1263,18 @@ function MobileSettings({
           </div>
           <button type="button" className={sessionTimeout ? "toggle on" : "toggle"} onClick={onToggleSessionTimeout}><i /></button>
         </div>
+        <button type="button" className="dv-wallet-disconnect" onClick={onLogout}>Log Out</button>
+        <button
+          type="button"
+          className="dv-wallet-disconnect"
+          onClick={() => {
+            if (window.confirm("Delete account permanently from this device?")) {
+              onDeleteAccount();
+            }
+          }}
+        >
+          Delete Account
+        </button>
       </div>
     </section>
   );
@@ -851,6 +1292,8 @@ function DesktopSettings({
   onConnectWallet,
   onChangeWallet,
   onDisconnectWallet,
+  onDeleteAccount,
+  onLogout,
 }: SettingsProps) {
   return (
     <section className="dv-desktop-grid">
@@ -888,6 +1331,18 @@ function DesktopSettings({
             </div>
             <button type="button" className={sessionTimeout ? "toggle on" : "toggle"} onClick={onToggleSessionTimeout}><i /></button>
           </div>
+          <button type="button" className="dv-wallet-disconnect" onClick={onLogout}>Log Out</button>
+          <button
+            type="button"
+            className="dv-wallet-disconnect"
+            onClick={() => {
+              if (window.confirm("Delete account permanently from this device?")) {
+                onDeleteAccount();
+              }
+            }}
+          >
+            Delete Account
+          </button>
         </div>
       </div>
     </section>

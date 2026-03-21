@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@400;500;600&amp;family=Inter:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed": "#e2e2e2",
+              "on-primary-fixed": "#1b1b1b",
+              "secondary-fixed": "#dde1ff",
+              "surface-bright": "#f9f9f9",
+              "primary-fixed": "#e2e2e2",
+              "surface-variant": "#e2e2e2",
+              "tertiary": "#474949",
+              "on-secondary-fixed-variant": "#0033c0",
+              "inverse-on-surface": "#f1f1f1",
+              "surface-container-highest": "#e2e2e2",
+              "on-error": "#ffffff",
+              "on-background": "#1b1b1b",
+              "on-tertiary-fixed-variant": "#454747",
+              "on-primary": "#ffffff",
+              "secondary-fixed-dim": "#b9c3ff",
+              "primary": "#484848",
+              "on-primary-container": "#dbdbdb",
+              "surface-tint": "#5e5e5e",
+              "background": "#f9f9f9",
+              "outline": "#747688",
+              "primary-container": "#606060",
+              "inverse-primary": "#c6c6c6",
+              "error": "#ba1a1a",
+              "surface-dim": "#dadada",
+              "on-surface-variant": "#434657",
+              "on-tertiary-container": "#dbdbdb",
+              "surface-container-lowest": "#ffffff",
+              "on-surface": "#1b1b1b",
+              "on-secondary-fixed": "#001257",
+              "tertiary-fixed-dim": "#c6c6c7",
+              "surface": "#f9f9f9",
+              "primary-fixed-dim": "#c6c6c6",
+              "inverse-surface": "#303030",
+              "on-secondary": "#ffffff",
+              "error-container": "#ffdad6",
+              "on-error-container": "#93000a",
+              "surface-container-low": "#f3f3f3",
+              "surface-container": "#eeeeee",
+              "secondary-container": "#0448ff",
+              "tertiary-container": "#5f6061",
+              "on-tertiary-fixed": "#1a1c1c",
+              "surface-container-high": "#e8e8e8",
+              "on-secondary-container": "#d6daff",
+              "on-primary-fixed-variant": "#474747",
+              "on-tertiary": "#ffffff",
+              "secondary": "#0035c6",
+              "outline-variant": "#c4c5da"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Manrope"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Manrope', sans-serif; }
+        .font-headline { font-family: 'Space Grotesk', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-white dark:bg-black border-none bg-slate-50 dark:bg-zinc-900 docked full-width top-0 z-50 sticky">
+<div class="flex justify-between items-center w-full px-12 py-6 max-w-none">
+<div class="text-2xl font-bold tracking-tighter text-black dark:text-white font-headline">
+                DeadVault
+            </div>
+<nav class="hidden md:flex items-center space-x-12">
+<a class="text-zinc-500 dark:text-zinc-400 font-medium font-headline hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="#">Home</a>
+<a class="text-zinc-500 dark:text-zinc-400 font-medium font-headline hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="#">Wallet</a>
+<a class="text-zinc-500 dark:text-zinc-400 font-medium font-headline hover:text-blue-600 dark:hover:text-blue-400 transition-colors" href="#">Address</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="scale-95 active:opacity-80 transition-all text-blue-600 dark:text-blue-500">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+</button>
+</div>
+</div>
+</header>
+<main class="max-w-[1440px] mx-auto px-12 pt-24 pb-48">
+<div class="flex flex-col lg:flex-row gap-24 items-start">
+<!-- Left Section: Visual Anchor -->
+<section class="lg:w-1/2 sticky top-48">
+<h1 class="font-headline font-bold text-7xl lg:text-8xl leading-[0.9] tracking-tighter text-on-surface mb-8">
+                    IDENTITY<br/>&amp; CONTROL
+                </h1>
+<p class="font-headline font-light text-2xl text-tertiary max-w-md tracking-tight leading-relaxed">
+                    Your existence, cryptographically secured and ready for transition.
+                </p>
+</section>
+<!-- Right Section: Interaction Cards -->
+<section class="lg:w-1/2 w-full flex flex-col gap-8">
+<!-- Card 1: Connected Wallet -->
+<div class="bg-surface-container-lowest rounded-xl p-10 flex flex-col gap-8 shadow-none group">
+<div class="flex justify-between items-start">
+<div>
+<span class="font-headline text-xs tracking-[0.2em] text-outline font-bold uppercase block mb-4">CONNECTED WALLET</span>
+<div class="font-headline text-3xl font-medium tracking-tight">0x8F22...E491</div>
+</div>
+<button class="bg-surface-container-highest text-on-surface px-8 py-3 rounded-full font-bold text-sm hover:bg-primary-container hover:text-on-primary transition-all scale-95 active:scale-90">
+                            Change
+                        </button>
+</div>
+</div>
+<!-- Card 2: Vault Status -->
+<div class="bg-secondary-container rounded-xl p-10 flex flex-col gap-10 text-on-secondary">
+<div class="flex items-center gap-4">
+<div class="bg-white/20 p-2 rounded-full">
+<span class="material-symbols-outlined text-3xl" data-icon="verified" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<span class="font-headline text-xs tracking-[0.2em] font-bold uppercase">VAULT STATUS</span>
+</div>
+<div class="font-headline text-8xl font-bold tracking-tighter leading-none">
+                        ACTIVE
+                    </div>
+</div>
+<!-- Card 3: Settings -->
+<div class="bg-surface-container-lowest rounded-xl p-10 flex flex-col gap-10">
+<span class="font-headline text-xs tracking-[0.2em] text-outline font-bold uppercase">SECURITY PARAMETERS</span>
+<div class="flex flex-col gap-6">
+<!-- Toggle 1 -->
+<div class="flex justify-between items-center py-4 border-b border-surface-container">
+<div class="flex flex-col gap-1">
+<span class="font-headline text-xl font-bold">Auto-Trigger</span>
+<span class="text-sm text-outline">Initiate transfer protocol after inactivity period</span>
+</div>
+<button class="w-14 h-8 bg-secondary-container rounded-full relative p-1 flex items-center justify-end">
+<div class="bg-white w-6 h-6 rounded-full shadow-md"></div>
+</button>
+</div>
+<!-- Toggle 2 -->
+<div class="flex justify-between items-center py-4">
+<div class="flex flex-col gap-1">
+<span class="font-headline text-xl font-bold">Privacy Shield</span>
+<span class="text-sm text-outline">Mask metadata across the ledger network</span>
+</div>
+<button class="w-14 h-8 bg-surface-container-highest rounded-full relative p-1 flex items-center justify-start">
+<div class="bg-white w-6 h-6 rounded-full shadow-sm"></div>
+</button>
+</div>
+</div>
+</div>
+<!-- Card 4: Verification -->
+<div class="bg-surface-container-lowest rounded-xl p-10 flex flex-col gap-8">
+<span class="font-headline text-xs tracking-[0.2em] text-outline font-bold uppercase">IDENTITY VERIFICATION</span>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Biometric -->
+<div class="bg-surface-container-low p-6 rounded-lg flex items-center gap-4 group">
+<div class="bg-surface-container-highest p-3 rounded-full text-secondary">
+<span class="material-symbols-outlined" data-icon="fingerprint">fingerprint</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline font-bold text-sm">Biometric Auth</span>
+<span class="text-xs text-secondary font-bold uppercase tracking-wider">SECURED</span>
+</div>
+</div>
+<!-- Backup Email -->
+<div class="bg-surface-container-low p-6 rounded-lg flex items-center gap-4">
+<div class="bg-surface-container-highest p-3 rounded-full text-secondary">
+<span class="material-symbols-outlined" data-icon="alternate_email">alternate_email</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline font-bold text-sm">Backup Email</span>
+<span class="text-xs text-secondary font-bold uppercase tracking-wider">VERIFIED</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- BottomNavBar -->
+<div class="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-8 md:flex hidden">
+<nav class="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-full max-w-md mx-auto flex justify-around items-center px-4 py-2 shadow-[0_20px_50px_rgba(0,71,255,0.1)] tonal layering via surface_container_highest">
+<!-- Dashboard Tab -->
+<a class="flex flex-col items-center justify-center text-zinc-400 p-4 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-all scale-110 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-['Space_Grotesk'] text-[12px] uppercase tracking-widest mt-1">Dashboard</span>
+</a>
+<!-- Notifications Tab -->
+<a class="flex flex-col items-center justify-center text-zinc-400 p-4 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-all scale-110 active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="font-['Space_Grotesk'] text-[12px] uppercase tracking-widest mt-1">Notifications</span>
+</a>
+<!-- Profile Tab (ACTIVE) -->
+<a class="flex flex-col items-center justify-center bg-blue-600 text-white rounded-full p-4 scale-110 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-['Space_Grotesk'] text-[12px] uppercase tracking-widest mt-1">Profile</span>
+</a>
+</nav>
+</div>
+<!-- Mobile BottomNavBar (md:hidden) -->
+<div class="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-6 md:hidden">
+<nav class="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-full w-[90%] flex justify-around items-center p-2 shadow-xl border border-surface-container-high">
+<span class="material-symbols-outlined text-zinc-400 p-3" data-icon="dashboard">dashboard</span>
+<span class="material-symbols-outlined text-zinc-400 p-3" data-icon="notifications">notifications</span>
+<div class="bg-blue-600 text-white p-4 rounded-full shadow-lg">
+<span class="material-symbols-outlined" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+</div>
+</nav>
+</div>
+</body></html>

@@ -22,12 +22,12 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dms
       SPRING_DATASOURCE_USERNAME: dms
       SPRING_DATASOURCE_PASSWORD: dms
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      BASE_RPC_URL: ${BASE_RPC_URL}
-      BASE_CHAIN_ID: ${BASE_CHAIN_ID}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY must be set}
+      BASE_RPC_URL: ${BASE_RPC_URL:-https://sepolia.base.org}
+      BASE_CHAIN_ID: ${BASE_CHAIN_ID:-84532}
       HOT_WALLET_PRIVATE_KEY: ${HOT_WALLET_PRIVATE_KEY}
       FACTORY_CONTRACT_ADDRESS: ${FACTORY_CONTRACT_ADDRESS}
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set and at least 32 chars}
     depends_on:
       postgres:
         condition: service_healthy
