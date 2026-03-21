@@ -1,18 +1,21 @@
-// scripts/deploy.js
 const hre = require("hardhat");
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
   const network = hre.network.name;
 
+  const SAFE_ADDRESS = process.env.GNOSIS_SAFE_ADDRESS;
+  if (!SAFE_ADDRESS) throw new Error("GNOSIS_SAFE_ADDRESS not set in environment");
+
   console.log(`Network: ${network} (chain ${hre.network.config.chainId})`);
-  console.log("Deployer:", deployer.address);
+  console.log("Deployer:         ", deployer.address);
+  console.log("Trigger authority:", SAFE_ADDRESS, "(Gnosis Safe)");
   console.log("Balance:", hre.ethers.formatEther(
     await hre.ethers.provider.getBalance(deployer.address)
   ), "ETH");
 
   const Factory = await hre.ethers.getContractFactory("DMSFactory");
-  const factory = await Factory.deploy(deployer.address);
+  const factory = await Factory.deploy(SAFE_ADDRESS);   // Safe is triggerAuthority, not deployer
   await factory.waitForDeployment();
 
   const factoryAddress = await factory.getAddress();
@@ -23,7 +26,7 @@ async function main() {
     try {
       await hre.run("verify:verify", {
         address: factoryAddress,
-        constructorArguments: [deployer.address],
+        constructorArguments: [SAFE_ADDRESS],           // must match constructor arg exactly
       });
       console.log("Verified.");
     } catch (e) {
