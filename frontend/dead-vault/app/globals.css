@@ -14,6 +14,10 @@
   --secondary: #0035c6;
   --secondary-container: #0448ff;
   --on-secondary: #ffffff;
+  --dv-float-bg: rgba(255, 255, 255, 0.84);
+  --dv-float-shadow: 0 16px 30px -16px rgba(0, 0, 0, 0.22);
+  --dv-float-shadow-hover: 0 22px 36px -16px rgba(0, 0, 0, 0.28);
+  --dv-button-radius: 0.85rem;
 }
 
 @theme inline {
@@ -531,16 +535,23 @@ body {
 .dv-btn-light {
   border: 0;
   border-radius: 999px;
+  min-height: 2.45rem;
+  padding: 0.5rem 0.9rem;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--dv-float-shadow);
   cursor: pointer;
   font-weight: 700;
+  font-size: 0.78rem;
+  line-height: 1;
   text-transform: uppercase;
-  letter-spacing: 0.13em;
-  transition: transform 150ms ease, box-shadow 180ms ease, opacity 150ms ease;
+  letter-spacing: 0.09em;
+  transition: transform 150ms ease, box-shadow 180ms ease, opacity 150ms ease, background-color 150ms ease, color 150ms ease;
 }
 
 .dv-btn-primary {
-  background: #fff;
-  color: var(--secondary-container);
+  background: var(--secondary-container);
+  color: #fff;
 }
 
 .dv-btn-strong {
@@ -549,15 +560,25 @@ body {
 }
 
 .dv-btn-light {
-  background: #fff;
+  background: var(--dv-float-bg);
   color: var(--secondary-container);
   flex: 1;
 }
 
 .dv-btn-primary:hover,
 .dv-btn-light:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(4, 72, 255, 0.18);
+  transform: scale(1.03);
+  box-shadow: var(--dv-float-shadow-hover);
+}
+
+.dv-btn-primary:focus-visible,
+.dv-btn-light:focus-visible,
+.dv-contract-item-actions button:focus-visible,
+.dv-profile-row button:focus-visible,
+.dv-wallet-disconnect:focus-visible,
+.dv-mini-action:focus-visible {
+  outline: 2px solid #9bb5ff;
+  outline-offset: 2px;
 }
 
 .dv-btn-primary:disabled,
@@ -573,18 +594,54 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  min-height: 2.4rem;
+  padding: 0.48rem 0.88rem;
+  font-size: 0.77rem;
+  letter-spacing: 0.08em;
 }
 
 .dv-auth-btn-icon {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 .dv-auth-btn-label {
   line-height: 1;
+  white-space: nowrap;
 }
 
 .dv-auth-btn--brand {
-  background: linear-gradient(145deg, #ffffff 0%, #edf2ff 100%);
+  background: var(--secondary-container);
+  color: #fff;
+}
+
+.dv-auth-shell .dv-btn-primary,
+.dv-auth-shell .dv-btn-light,
+.dv-auth-shell .dv-auth-btn {
+  min-height: 2.35rem;
+  padding: 0.46rem 0.82rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+}
+
+.dv-auth-shell .dv-auth-actions > button:not(.dv-btn-primary):not(.dv-btn-light):not(.dv-auth-skip) {
+  border: 0;
+  border-radius: 999px;
+  min-height: 2.35rem;
+  padding: 0.46rem 0.82rem;
+  background: var(--dv-float-bg);
+  color: var(--secondary-container);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  box-shadow: var(--dv-float-shadow);
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 180ms ease, opacity 150ms ease;
+}
+
+.dv-auth-shell .dv-auth-actions > button:not(.dv-btn-primary):not(.dv-btn-light):not(.dv-auth-skip):hover {
+  transform: scale(1.03);
+  box-shadow: var(--dv-float-shadow-hover);
 }
 
 .dv-balance-head {
@@ -611,6 +668,15 @@ body {
 .dv-balance-actions {
   display: none;
   gap: 0.8rem;
+}
+
+.dv-checkin-btn {
+  min-height: 2.2rem;
+  padding: 0.42rem 0.8rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  width: fit-content;
+  margin-top: 0.5rem;
 }
 
 .dv-exec-card {
@@ -839,20 +905,24 @@ body {
 .dv-contract-item-actions button {
   border: 0;
   border-radius: 999px;
-  background: var(--surface-highest);
-  color: #1f2937;
+  background: var(--secondary-container);
+  color: #fff;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--dv-float-shadow);
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  padding: 0.45rem 0.75rem;
+  padding: 0.5rem 0.85rem;
   cursor: pointer;
   max-width: 100%;
   white-space: nowrap;
+  transition: transform 150ms ease, box-shadow 180ms ease, opacity 150ms ease;
 }
 
 .dv-contract-item-actions button.is-danger {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--secondary-container);
+  color: #fff;
 }
 
 .dv-section-title {
@@ -878,9 +948,15 @@ body {
 .dv-profile-row button {
   border: 0;
   border-radius: 999px;
+  min-height: 2.6rem;
   padding: 0.55rem 1rem;
-  background: var(--surface-highest);
+  background: var(--secondary-container);
+  color: #fff;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--dv-float-shadow);
   cursor: pointer;
+  transition: transform 150ms ease, box-shadow 180ms ease, opacity 150ms ease;
 }
 
 .dv-inline-error {
@@ -893,14 +969,18 @@ body {
 .dv-wallet-disconnect {
   margin-top: 0.65rem;
   border: 0;
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--secondary-container);
+  color: #fff;
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   border-radius: 999px;
   padding: 0.55rem 0.9rem;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--dv-float-shadow);
   cursor: pointer;
+  transition: transform 150ms ease, box-shadow 180ms ease, opacity 150ms ease;
 }
 
 .dv-toggle-row {
@@ -976,12 +1056,26 @@ body {
 
 .dv-mini-action {
   border: 0;
-  background: transparent;
-  color: var(--secondary-container);
-  font-size: 0.95rem;
+  border-radius: 999px;
+  background: var(--secondary-container);
+  color: #fff;
+  font-size: 0.82rem;
   letter-spacing: 0.04em;
   font-weight: 700;
+  padding: 0.45rem 0.8rem;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--dv-float-shadow);
   cursor: pointer;
+  transition: transform 150ms ease, box-shadow 180ms ease, opacity 150ms ease;
+}
+
+.dv-contract-item-actions button:hover,
+.dv-profile-row button:hover,
+.dv-wallet-disconnect:hover,
+.dv-mini-action:hover {
+  transform: scale(1.03);
+  box-shadow: var(--dv-float-shadow-hover);
 }
 
 .dv-mobile-verification article h3 {

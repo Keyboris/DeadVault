@@ -1003,31 +1003,6 @@ function DesktopDashboard({
       </div>
 
       <div className="dv-col-right">
-        <div className="dv-exec-card">
-          <div className="dv-card-head">
-            <span>NEW SMART CONTRACT</span>
-            <span className="dv-live-dot" />
-          </div>
-          <label>RECIPIENT ADDRESS</label>
-          <input type="text" placeholder="0x0000...dead" />
-          <label>INSTRUCTIONAL LEGACY</label>
-          <div className="dv-input-wrap">
-            <textarea rows={6} placeholder="Define the final distribution of digital consciousness..." />
-            <button type="button" className="dv-fab" onClick={() => onOpenAction("voice-legacy-input")}><FaMicrophone aria-hidden="true" /></button>
-          </div>
-          <button type="button" className="dv-btn-primary dv-btn-strong" onClick={() => onOpenAction("execute-permanence")}>EXECUTE PERMANENCE</button>
-          <p className="dv-danger-note">THIS ACTION CANNOT BE REVERSED ONCE THE HEARTBEAT SENSOR REACHES TERMINAL STATE.</p>
-        </div>
-        <div className="dv-status-card">
-          <div className="dv-status-left">
-            <FaShieldHalved aria-hidden="true" />
-            <div>
-              <h4>VAULT INTEGRITY</h4>
-              <p>Encryption Level: Quantum Proof</p>
-            </div>
-          </div>
-          <strong>99.9%</strong>
-        </div>
         <WillSection
           contracts={contracts}
           willTitle={willTitle}
@@ -1044,6 +1019,16 @@ function DesktopDashboard({
           contractsError={contractsError}
           isLoadingContracts={isLoadingContracts}
         />
+        <div className="dv-status-card">
+          <div className="dv-status-left">
+            <FaShieldHalved aria-hidden="true" />
+            <div>
+              <h4>VAULT INTEGRITY</h4>
+              <p>Encryption Level: Quantum Proof</p>
+            </div>
+          </div>
+          <strong>99.9%</strong>
+        </div>
       </div>
     </section>
   );
@@ -1164,8 +1149,8 @@ function MobileNotifications({
         <span>CHECK-IN</span>
         <p className="dv-subcopy">Current status: {statusText}</p>
         {statusError ? <p className="dv-inline-error">{statusError}</p> : null}
-        <button type="button" className="dv-btn-primary" onClick={onCheckIn} disabled={isCheckingIn}>
-          {isCheckingIn ? "Checking In..." : "I'm Alive"}
+        <button type="button" className="dv-btn-primary dv-checkin-btn" onClick={onCheckIn} disabled={isCheckingIn}>
+          {isCheckingIn ? "Checking In..." : "I Am Alive"}
         </button>
       </div>
       <div className="dv-list">
@@ -1206,8 +1191,8 @@ function DesktopNotifications({
         <span>CHECK-IN</span>
         <p className="dv-subcopy">Current status: {statusText}</p>
         {statusError ? <p className="dv-inline-error">{statusError}</p> : null}
-        <button type="button" className="dv-btn-primary" onClick={onCheckIn} disabled={isCheckingIn}>
-          {isCheckingIn ? "Checking In..." : "I'm Alive"}
+        <button type="button" className="dv-btn-primary dv-checkin-btn" onClick={onCheckIn} disabled={isCheckingIn}>
+          {isCheckingIn ? "Checking In..." : "I Am Alive"}
         </button>
       </div>
       <div className="dv-list">

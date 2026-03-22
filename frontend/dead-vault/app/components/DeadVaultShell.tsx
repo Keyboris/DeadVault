@@ -358,7 +358,7 @@ function CreateAccountFlow({ onComplete }: { onComplete: (profile: StoredProfile
               <p className="dv-subcopy">Connect Coinbase Wallet now, or skip and connect later in settings.</p>
               <div className="dv-profile-row">
                 <strong>{walletAddress ?? "No wallet connected"}</strong>
-                <button type="button" className="dv-auth-btn" onClick={connectCoinbase}>
+                <button type="button" className="dv-btn-light dv-auth-btn" onClick={connectCoinbase}>
                   <FaWallet className="dv-auth-btn-icon" aria-hidden="true" />
                   <span className="dv-auth-btn-label">Connect Coinbase</span>
                 </button>
@@ -386,7 +386,7 @@ function CreateAccountFlow({ onComplete }: { onComplete: (profile: StoredProfile
                 <input className="dv-auth-input" type="text" value={recipientNote} onChange={(e) => setRecipientNote(e.target.value)} placeholder="Primary beneficiary" />
               </label>
               <div className="dv-auth-actions">
-                <button type="button" onClick={addRecipient}>Add Recipient</button>
+                <button type="button" className="dv-btn-light" onClick={addRecipient}>Add Recipient</button>
                 <button type="button" className="dv-auth-skip" onClick={() => setSkipRecipients((v) => !v)}>
                   {skipRecipients ? "Undo Skip" : "Skip Recipients For Now"}
                 </button>
