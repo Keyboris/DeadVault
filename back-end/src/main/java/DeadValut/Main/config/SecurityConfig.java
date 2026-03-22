@@ -1,4 +1,4 @@
-// config/SecurityConfig.java
+// config/SecurityConfig.java  (UPDATED — keyholder route permissions)
 package DeadValut.Main.config;
 
 import DeadValut.Main.service.JwtService;
@@ -41,23 +41,16 @@ public class SecurityConfig {
             @Value("${dms.cors.allowed-origins:http://localhost:3000,http://127.0.0.1:3000,http://localhost:4173,http://127.0.0.1:4173,http://192.168.*:3000,http://192.168.*:4173,http://172.*:3000,http://172.*:4173}")
             String allowedOrigins
     ) {
-        this.jwtService = jwtService;
+        this.jwtService     = jwtService;
         this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // Disable CSRF — stateless JWT API, no session cookies
             .csrf(AbstractHttpConfigurer::disable)
-
-            // Enable CORS for browser-based frontend calls
             .cors(Customizer.withDefaults())
-
-            // No session — every request must carry a JWT
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-            // Disable Spring's default form login and HTTP Basic pop-up
             .formLogin(AbstractHttpConfigurer::disable)
             .httpBasic(AbstractHttpConfigurer::disable)
 
@@ -65,35 +58,36 @@ public class SecurityConfig {
                 // ==========================================
                 // 🔓 PUBLIC ENDPOINTS (No Auth Required)
                 // ==========================================
-                
+
                 // 1. Authentication (SIWE)
                 .requestMatchers(HttpMethod.GET,  "/api/auth/nonce").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/verify").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                
+
                 // 2. Hackathon Testing (Free-form Solidity Generator)
                 .requestMatchers(HttpMethod.POST, "/api/contracts/generate").permitAll()
 
                 // 3. Health & Monitoring
                 .requestMatchers("/actuator/**").permitAll()
 
-                // 4. Global Error Handler (Prevents Spring from hiding 404s/500s behind a 403)
+                // 4. Global Error Handler
                 .requestMatchers("/error").permitAll()
+
+                // 5. Keyholder confirmation-round read (keyholders look up the
+                //    pending round for a vault owner by userId query param).
+                //    Requires a valid JWT but the wallet doesn't have to be the owner.
+                .requestMatchers(HttpMethod.GET,  "/api/keyholders/confirmation-round").authenticated()
+
+                // 6. Keyholder vote endpoint — any authenticated user whose wallet is
+                //    a registered keyholder for the relevant vault may call this.
+                .requestMatchers(HttpMethod.POST, "/api/keyholders/confirm").authenticated()
 
                 // ==========================================
                 // 🔒 SECURED ENDPOINTS (Requires valid JWT)
                 // ==========================================
-                // This catch-all automatically secures the following from your API Ref:
-                // - POST /api/will
-                // - PUT  /api/will
-                // - POST /api/check-in
-                // - GET  /api/check-in/status
-                // - GET  /api/vault/balance
-                // - GET  /api/contracts
                 .anyRequest().authenticated()
             )
 
-            // Plug in JWT extraction before Spring's username/password filter.
             .addFilterBefore(jwtAuthFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -127,7 +121,8 @@ public class SecurityConfig {
         }
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept",
+                                          "Origin", "X-Requested-With"));
         config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(false);
         config.setMaxAge(3600L);
@@ -160,9 +155,9 @@ public class SecurityConfig {
 
                             UsernamePasswordAuthenticationToken auth =
                                 new UsernamePasswordAuthenticationToken(
-                                    userId,   // principal — injected via @AuthenticationPrincipal
-                                    null,     // credentials — not needed post-authentication
-                                    List.of() // authorities — none required for this app
+                                    userId,
+                                    null,
+                                    List.of()
                                 );
                             SecurityContextHolder.getContext().setAuthentication(auth);
                         }

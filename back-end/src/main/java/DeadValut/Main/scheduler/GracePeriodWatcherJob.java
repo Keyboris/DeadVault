@@ -1,10 +1,12 @@
-// scheduler/GracePeriodWatcherJob.java
+// scheduler/GracePeriodWatcherJob.java  (UPDATED — keyholder gate)
 package DeadValut.Main.scheduler;
 
 import DeadValut.Main.model.Contract;
 import DeadValut.Main.model.SwitchEvent;
 import DeadValut.Main.repository.*;
+import DeadValut.Main.service.ConfirmationService;
 import DeadValut.Main.service.ContractDeploymentService;
+import DeadValut.Main.service.KeyholderService;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.slf4j.Logger;
@@ -15,6 +17,24 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Quartz job — runs every 15 minutes.
+ *
+ * <p>For each user whose grace period has expired:
+ * <ol>
+ *   <li>Attempt an optimistic lock on the ACTIVE vault (→ TRIGGERING).</li>
+ *   <li><strong>If the user has secondary keyholders configured</strong>
+ *       ({@code keyholderThreshold > 0}), open a
+ *       {@link DeadValut.Main.model.KeyholderConfirmationRound} and return —
+ *       the vault remains in TRIGGERING until the round resolves.</li>
+ *   <li><strong>Otherwise</strong> (feature disabled), dispatch the vault trigger
+ *       immediately as before.</li>
+ * </ol>
+ *
+ * <p>The keyholder path is handled by {@link ConfirmationService#openRound}.
+ * The vault trigger path (on approval or round expiry) is in
+ * {@link ConfirmationService#castVote} / {@link ConfirmationService#expireRound}.
+ */
 @Component
 public class GracePeriodWatcherJob implements Job {
 
@@ -25,17 +45,23 @@ public class GracePeriodWatcherJob implements Job {
     private final BeneficiaryRepository beneficiaryRepo;
     private final ContractDeploymentService deploymentService;
     private final SwitchEventRepository eventRepo;
+    private final KeyholderService keyholderService;
+    private final ConfirmationService confirmationService;
 
     public GracePeriodWatcherJob(CheckInConfigRepository configRepo,
                                   ContractRepository contractRepo,
                                   BeneficiaryRepository beneficiaryRepo,
                                   ContractDeploymentService deploymentService,
-                                  SwitchEventRepository eventRepo) {
+                                  SwitchEventRepository eventRepo,
+                                  KeyholderService keyholderService,
+                                  ConfirmationService confirmationService) {
         this.configRepo = configRepo;
         this.contractRepo = contractRepo;
         this.beneficiaryRepo = beneficiaryRepo;
         this.deploymentService = deploymentService;
         this.eventRepo = eventRepo;
+        this.keyholderService = keyholderService;
+        this.confirmationService = confirmationService;
     }
 
     @Override
@@ -44,46 +70,57 @@ public class GracePeriodWatcherJob implements Job {
             var userId = config.getUserId();
 
             // Optimistic lock — transitions the user's ACTIVE vault to TRIGGERING.
-            // Returns 0 if no ACTIVE vault exists (already triggering or triggered).
             int locked = contractRepo.setStatusIfActive(userId);
             if (locked == 0) {
-                log.warn("Skipping user {} — no ACTIVE vault found (already triggering or triggered)", userId);
+                log.warn("Skipping user {} — no ACTIVE vault (already triggering/triggered)",
+                        userId);
                 return;
             }
 
+            // ── Keyholder gate ───────────────────────────────────────────────
+            if (keyholderService.isFeatureEnabled(userId)) {
+                int threshold = keyholderService.getThreshold(userId);
+                try {
+                    confirmationService.openRound(userId, threshold);
+                    // Update the check-in config to GRACE so the UI shows the right state
+                    config.setStatus("GRACE");
+                    configRepo.save(config);
+                    log.info("Keyholder confirmation round opened for user {} (threshold={})",
+                            userId, threshold);
+                } catch (Exception e) {
+                    // Roll back the TRIGGERING lock so the job can retry next cycle
+                    contractRepo.setStatusIfTriggering(userId, "ACTIVE");
+                    log.error("Failed to open keyholder round for user {}: {}",
+                            userId, e.getMessage());
+                }
+                return; // do NOT trigger immediately
+            }
+            // ────────────────────────────────────────────────────────────────
+
+            // No keyholders configured — trigger immediately (original behaviour)
             try {
-                // BUG-1 FIX: after V10 a user can have multiple contract rows
-                // (e.g. one REVOKED + one now-TRIGGERING). The old findByUserId()
-                // would throw IncorrectResultSizeDataAccessException. We now load
-                // the specific row we just transitioned to TRIGGERING.
                 Contract contract = contractRepo
                         .findByUserIdAndStatus(userId, "TRIGGERING")
                         .orElseThrow(() -> new IllegalStateException(
-                                "TRIGGERING contract not found for user " + userId
-                                + " immediately after lock — possible race condition"));
+                                "TRIGGERING contract not found for user " + userId));
 
                 String txHash = dispatch(contract);
 
-                // BUG-3 FIX: setTriggered now only flips the TRIGGERING row,
-                // leaving any REVOKED rows from previous wills untouched.
                 contractRepo.setTriggered(userId, txHash, Instant.now());
                 config.setStatus("TRIGGERED");
                 configRepo.save(config);
                 eventRepo.save(SwitchEvent.of(userId, "TRIGGERED",
                     Map.of("txHash", txHash, "vaultType", contract.getVaultType())));
-                log.info("Vault triggered for user {} (type={}) — tx: {}",
-                    userId, contract.getVaultType(), txHash);
+                log.info("Vault triggered for user {} (type={}) tx={}",
+                        userId, contract.getVaultType(), txHash);
 
             } catch (Exception e) {
-                // For TIME_LOCKED vaults the trigger() call will revert if the time-lock
-                // has not yet elapsed. The exception rolls the status back to ACTIVE so the
-                // job retries on the next 15-minute cycle without any manual intervention.
                 String vaultType = contractRepo
                         .findByUserIdAndStatus(userId, "TRIGGERING")
                         .map(Contract::getVaultType)
                         .orElse("UNKNOWN");
                 log.error("Trigger attempt for user {} (type={}) failed: {} — will retry",
-                    userId, vaultType, e.getMessage());
+                        userId, vaultType, e.getMessage());
                 contractRepo.setStatusIfTriggering(userId, "ACTIVE");
             }
         });
@@ -91,20 +128,14 @@ public class GracePeriodWatcherJob implements Job {
 
     /**
      * Dispatches to the correct trigger path based on the vault type stored in the DB.
-     * This is the only place in the scheduler that knows about vault types — all contract
-     * interaction logic stays in ContractDeploymentService.
      */
     private String dispatch(Contract contract) throws Exception {
         return switch (contract.getVaultType()) {
 
             case "STANDARD", "TIME_LOCKED" ->
-                // TIME_LOCKED: trigger() will revert on-chain if unlockTime has not passed.
-                // The exception propagates up, rolls status back to ACTIVE, and retries next cycle.
                 deploymentService.triggerVault(contract.getContractAddress());
 
             case "CONDITIONAL_SURVIVAL" -> {
-                // Retrieve the indices of beneficiaries that require survival confirmation.
-                // These are stored in the beneficiaries table with condition = CONDITIONAL_SURVIVAL.
                 List<Integer> conditionalIndexes = beneficiaryRepo
                     .findByConfigIdOrderByIndex(contract.getBeneficiaryConfigId())
                     .stream()

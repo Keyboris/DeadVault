@@ -1,4 +1,4 @@
-// service/JwtService.java
+// service/JwtService.java  (UPDATED — adds extractWalletAddress)
 package DeadValut.Main.service;
 
 import io.jsonwebtoken.Claims;
@@ -36,13 +36,30 @@ public class JwtService {
     }
 
     public UUID extractUserId(String token) {
-        Claims claims = Jwts.parser().verifyWith(key).build()
-            .parseSignedClaims(token).getPayload();
+        Claims claims = parseClaims(token);
         return UUID.fromString(claims.getSubject());
+    }
+
+    /**
+     * Extracts the wallet address claim embedded in the JWT.
+     * Used by {@link DeadValut.Main.route.KeyholderRoute} to identify which
+     * keyholder is casting a confirmation vote without requiring them to pass
+     * their wallet address as a separate request parameter.
+     */
+    public String extractWalletAddress(String token) {
+        return parseClaims(token).get("wallet", String.class);
     }
 
     public boolean isValid(String token) {
         try { extractUserId(token); return true; }
         catch (Exception e) { return false; }
+    }
+
+    private Claims parseClaims(String token) {
+        return Jwts.parser()
+                   .verifyWith(key)
+                   .build()
+                   .parseSignedClaims(token)
+                   .getPayload();
     }
 }

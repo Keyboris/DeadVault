@@ -1,4 +1,4 @@
-// service/CheckInService.java
+// service/CheckInService.java  (UPDATED — cancels pending keyholder rounds on check-in)
 package DeadValut.Main.service;
 
 import DeadValut.Main.model.*;
@@ -16,11 +16,14 @@ public class CheckInService {
 
     private final CheckInConfigRepository configRepo;
     private final SwitchEventRepository   eventRepo;
+    private final ConfirmationService     confirmationService;
 
     public CheckInService(CheckInConfigRepository configRepo,
-                          SwitchEventRepository eventRepo) {
-        this.configRepo = configRepo;
-        this.eventRepo  = eventRepo;
+                          SwitchEventRepository eventRepo,
+                          ConfirmationService confirmationService) {
+        this.configRepo          = configRepo;
+        this.eventRepo           = eventRepo;
+        this.confirmationService = confirmationService;
     }
 
     @Transactional
@@ -33,6 +36,10 @@ public class CheckInService {
         config.setGraceExpiresAt(null);
         config.setStatus("ACTIVE");
         configRepo.save(config);
+
+        // If a keyholder confirmation round is pending (owner missed a check-in but
+        // now came back), cancel it so the vault is NOT triggered.
+        confirmationService.cancelPendingRounds(userId);
 
         eventRepo.save(SwitchEvent.of(userId, "CHECK_IN", null));
         return new CheckInResponse(config.getNextDueAt(), config.getIntervalDays());
