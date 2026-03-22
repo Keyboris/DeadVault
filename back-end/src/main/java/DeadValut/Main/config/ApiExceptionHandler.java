@@ -14,17 +14,31 @@ import java.util.Map;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    private String sanitizeErrorMessage(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "Request failed";
+        }
+
+        String sanitized = raw;
+        sanitized = sanitized.replaceAll("https?://\\S+", "request");
+        sanitized = sanitized.replaceAll("(?i)\\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\\s+/\\S+", "request");
+        sanitized = sanitized.replaceAll("(?i)/api/\\S*", "request");
+        sanitized = sanitized.trim();
+
+        return sanitized.isBlank() ? "Request failed" : sanitized;
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> handleResponseStatus(ResponseStatusException ex) {
         HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
-        String message = ex.getReason() != null ? ex.getReason() : "Request failed";
+        String message = sanitizeErrorMessage(ex.getReason());
         return ResponseEntity.status(status).body(Map.of("error", message));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {
         FieldError first = ex.getBindingResult().getFieldErrors().stream().findFirst().orElse(null);
-        String message = first != null ? first.getDefaultMessage() : "Validation failed";
+        String message = sanitizeErrorMessage(first != null ? first.getDefaultMessage() : "Validation failed");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", message));
     }
 
@@ -34,12 +48,13 @@ public class ApiExceptionHandler {
                 .findFirst()
                 .map(v -> v.getMessage())
                 .orElse("Validation failed");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", message));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", sanitizeErrorMessage(message)));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", sanitizeErrorMessage(ex.getMessage())));
     }
 
     @ExceptionHandler(Exception.class)

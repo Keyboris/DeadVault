@@ -30,3 +30,20 @@ export type StoredProfile = {
 
 export const AUTH_PROFILE_STORAGE_KEY = "deadvault.auth.profile";
 export const AUTH_SESSION_STORAGE_KEY = "deadvault.auth.session";
+
+export function readStoredProfile(): StoredProfile | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = localStorage.getItem(AUTH_PROFILE_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw) as StoredProfile;
+  } catch {
+    return null;
+  }
+}

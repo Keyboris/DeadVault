@@ -23,6 +23,18 @@
   --font-mono: var(--font-geist-mono);
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -769,6 +781,7 @@ body {
 .dv-contract-list {
   display: grid;
   gap: 0.65rem;
+  min-width: 0;
 }
 
 .dv-contract-item {
@@ -778,12 +791,21 @@ body {
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.dv-contract-item > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .dv-contract-item h4 {
   font-family: "Space Grotesk", sans-serif;
   font-size: 1rem;
   font-weight: 700;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dv-contract-item p {
@@ -791,6 +813,8 @@ body {
   color: var(--text-soft);
   font-size: 0.87rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dv-contract-item span {
@@ -801,12 +825,15 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  overflow-wrap: anywhere;
 }
 
 .dv-contract-item-actions {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  flex: 0 0 auto;
+  max-width: 100%;
 }
 
 .dv-contract-item-actions button {
@@ -819,6 +846,8 @@ body {
   letter-spacing: 0.04em;
   padding: 0.45rem 0.75rem;
   cursor: pointer;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 .dv-contract-item-actions button.is-danger {

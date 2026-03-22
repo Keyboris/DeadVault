@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { IconType } from "react-icons";
-import type { VaultContract } from "./authStorage";
+import { readStoredProfile, type VaultContract } from "./authStorage";
 import {
   checkIn,
   getCheckInStatus,
   getContracts as getContractsRequest,
   getVaultBalance,
+  sendWillNotification,
   submitWill as submitWillRequest,
   updateWill as updateWillRequest,
 } from "@/app/lib/api/endpoints";
@@ -351,13 +352,58 @@ export function DeadVaultApp({
 
     setIsSubmittingWill(true);
     try {
+      let notificationPayload:
+        | {
+            action: "created" | "updated";
+            templateType: string;
+            contractAddress: string;
+            deploymentTxHash: string;
+            beneficiariesCount: number;
+          }
+        | null = null;
+
       if (editingContractId) {
-        await updateWillRequest({ willText: trimmedContent });
+        const response = await updateWillRequest({ willText: trimmedContent });
+        notificationPayload = {
+          action: "updated",
+          templateType: response.templateType,
+          contractAddress: response.newContractAddress,
+          deploymentTxHash: response.deploymentTxHash,
+          beneficiariesCount: response.beneficiaries.length,
+        };
       } else {
-        await submitWillRequest({ willText: trimmedContent });
+        const response = await submitWillRequest({ willText: trimmedContent });
+        notificationPayload = {
+          action: "created",
+          templateType: response.templateType,
+          contractAddress: response.contractAddress,
+          deploymentTxHash: response.deploymentTxHash,
+          beneficiariesCount: response.beneficiaries.length,
+        };
       }
+
+      let notificationMessage = "";
+      if (notificationPayload) {
+        const storedProfile = readStoredProfile();
+        try {
+          const notificationResult = await sendWillNotification({
+            ...notificationPayload,
+            walletAddress,
+            fallbackEmail: storedProfile?.email ?? null,
+          });
+          if (notificationResult.status === "failed" || notificationResult.status === "skipped") {
+            notificationMessage = notificationResult.message;
+          }
+        } catch {
+          notificationMessage = "Will was saved, but notification service could not be reached.";
+        }
+      }
+
       await refreshContracts();
       resetWillForm();
+      if (notificationMessage) {
+        setWillError(notificationMessage);
+      }
     } catch (error) {
       if (editingContractId && error instanceof ApiClientError && (error.status === 404 || error.status === 405)) {
         setWillError("Will update is not enabled on this backend yet. Create a new will or enable PUT /api/will.");

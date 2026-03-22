@@ -98,6 +98,22 @@ export type SmartContractResponse = {
   contract: string;
 };
 
+export type WillNotificationRequest = {
+  walletAddress: string | null;
+  fallbackEmail?: string | null;
+  action: "created" | "updated";
+  templateType: string;
+  contractAddress: string;
+  deploymentTxHash: string;
+  beneficiariesCount: number;
+};
+
+export type WillNotificationResponse = {
+  status: "sent" | "skipped" | "failed";
+  message: string;
+  recipientEmail: string | null;
+};
+
 export type ApiErrorPayload = {
   error?: string;
 };
