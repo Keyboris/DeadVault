@@ -33,37 +33,11 @@ const HOME_HERO_TEXT = "MONEY HAS NO VALUE IN DEATH";
 function TypingHeroTitle({
   text,
   className,
-  typingMs = 55,
-  pauseMs = 1200,
 }: {
   text: string;
   className: string;
-  typingMs?: number;
-  pauseMs?: number;
 }) {
-  const [visibleCount, setVisibleCount] = useState(0);
-
-  useEffect(() => {
-    if (visibleCount >= text.length) {
-      const hold = window.setTimeout(() => {
-        setVisibleCount(0);
-      }, pauseMs);
-      return () => window.clearTimeout(hold);
-    }
-
-    const step = window.setTimeout(() => {
-      setVisibleCount((current) => Math.min(current + 1, text.length));
-    }, typingMs);
-
-    return () => window.clearTimeout(step);
-  }, [visibleCount, text, typingMs, pauseMs]);
-
-  return (
-    <h1 className={className} aria-label={text}>
-      {text.slice(0, visibleCount)}
-      <span className="dv-typing-cursor" aria-hidden="true">|</span>
-    </h1>
-  );
+  return <h1 className={className}>{text}</h1>;
 }
 
 function formatCountdown(isoTime: string | null, currentMs: number): string {
