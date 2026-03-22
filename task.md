@@ -1,0 +1,38 @@
+# Integration of Multisig into DeadVault
+
+- [x] Research and Analyze Multisig Directory
+    - [x] Analyze [multisig/contracts/MultiSigWallet.sol](file:///Users/user1/Documents/Documents/hackathon/DeadVault/multisig/contracts/MultiSigWallet.sol)
+    - [x] Analyze [multisig/contracts/MultiSigFactory.sol](file:///Users/user1/Documents/Documents/hackathon/DeadVault/multisig/contracts/MultiSigFactory.sol)
+    - [x] Analyze [multisig/contracts/DeadmanModule.sol](file:///Users/user1/Documents/Documents/hackathon/DeadVault/multisig/contracts/DeadmanModule.sol)
+    - [x] Analyze [multisig/scripts/demo.js](file:///Users/user1/Documents/Documents/hackathon/DeadVault/multisig/scripts/demo.js) for usage patterns
+- [x] Research DeadVault Project Structure
+    - [x] Analyze existing contracts in `contracts/contracts`
+    - [x] Analyze `frontend` and `back-end` to see where Multisig fits
+- [x] Design Integration Plan
+    - [x] Determine how to use `MultiSigFactory` in the main app
+    - [x] Determine how to interact with `MultiSigWallet` from the frontend
+    - [x] Determine how to leverage `DeadmanModule`
+- [x] Implementation
+    - [x] Update backend to support multisig vaults
+    - [x] Update frontend to support multisig creation and management
+- [x] Standardization of Multisig Architecture
+    - [x] Align `MultiSigFactory.sol` events with `DMSFactory.sol`
+    - [x] Update `UpdateWillService.java` for multisig support
+    - [x] Update `SmartContractGeneratorService.java` prompt for architectural consistency
+- [x] Verification
+    - [x] Test multisig functionality in the integrated environment
+    - [x] Verify event-based vault address extraction in backend
+- [x] Automation
+    - [x] Create master deployment script `deploy-all.sh` for one-step synchronization.
+- [x] UI/UX Improvements
+    - [x] Implement professional Toast notification system for action feedback.
+    - [x] Fix mobile login button layout (stacking).
+    - [x] Add mobile-friendly login via Coinbase Wallet SDK (no extensions needed).
+- [x] Bug Fixes
+    - [x] Fix PostgreSQL JSONB type mismatch using Hibernate 6 `@JdbcTypeCode`.
+    - [x] Fix `crypto.randomUUID` hydration mismatch and missing dependency.
+    - [x] Fix production build errors (incompatible static export).
+- [x] Mobile Authentication Stability
+    - [x] Integrate WalletConnect as a robust mobile alternative.
+    - [x] Add WalletConnect Project ID support.
+    - [x] Optimize redirect and session resumption on mobile.

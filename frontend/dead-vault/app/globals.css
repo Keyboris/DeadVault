@@ -969,11 +969,21 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
 }
 
 .dv-profile-row strong {
   font-family: "Space Grotesk", sans-serif;
   font-size: 1.35rem;
+}
+
+.dv-wallet-value {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dv-profile-row button {
@@ -1485,5 +1495,13 @@ body {
   .dv-toast {
     min-width: 0;
     width: 100%;
+  }
+
+  .dv-profile-row {
+    flex-wrap: wrap;
+  }
+
+  .dv-profile-row .dv-wallet-value {
+    flex: 1 1 100%;
   }
 }

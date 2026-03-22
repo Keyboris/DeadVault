@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAccount, useConnect } from "wagmi";
-import { injected } from "wagmi/connectors";
 import { FaEthereum, FaWallet } from "react-icons/fa6";
 import { DeadVaultApp } from "./DeadVaultApp";
 import {
@@ -50,6 +49,9 @@ function getReadableAuthError(error: unknown): string {
 
     const maybeMessage = (error as { message?: string }).message;
     if (maybeMessage) {
+      if (maybeMessage.toLowerCase().includes("crypto.subtle") || maybeMessage.toLowerCase().includes("generatekey")) {
+        return "Secure crypto APIs are unavailable in this browser context. Use HTTPS, a native dApp browser, or WalletConnect.";
+      }
       if (maybeMessage.toLowerCase().includes("failed to fetch")) {
         return "Backend unreachable. Check NEXT_PUBLIC_API_BASE_URL and backend status.";
       }
@@ -61,6 +63,16 @@ function getReadableAuthError(error: unknown): string {
   }
 
   return "Sign In with Ethereum failed. Please try again.";
+}
+
+function formatWalletDisplay(walletAddress: string | null | undefined): string {
+  if (!walletAddress) {
+    return "Not connected";
+  }
+  if (walletAddress.length <= 16) {
+    return walletAddress;
+  }
+  return `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 }
 
 export function DeadVaultShell() {
@@ -240,19 +252,30 @@ function CreateAccountFlow({ onComplete }: { onComplete: (profile: StoredProfile
 
       if (!connectedAddress) {
         // Try injected first (for DApp browsers), then fallback to Coinbase Wallet SDK (for mobile linking/QR)
-        const injectedConnector = connectors.find(c => c.id === 'injected');
-        const coinbaseConnector = connectors.find(c => c.id === 'coinbaseWalletSDK');
+        const injectedConnector = connectors.find((connector) => connector.id === "injected");
+        const walletConnectConnector = connectors.find((connector) => connector.id === "walletConnect");
+        const coinbaseConnector = connectors.find((connector) => connector.id === "coinbaseWalletSDK");
+        const canUseCoinbaseSdk =
+          typeof window !== "undefined" &&
+          window.isSecureContext &&
+          typeof window.crypto?.subtle !== "undefined";
 
-        try {
-          if (injectedConnector && (window as any).ethereum) {
-            const connection = await connectAsync({ connector: injectedConnector });
+        const candidateConnectors = [
+          injectedConnector && (window as Window & { ethereum?: unknown }).ethereum ? injectedConnector : undefined,
+          walletConnectConnector,
+          canUseCoinbaseSdk ? coinbaseConnector : undefined,
+        ].filter((connector): connector is NonNullable<typeof connector> => Boolean(connector));
+
+        for (const connector of candidateConnectors) {
+          try {
+            const connection = await connectAsync({ connector });
             connectedAddress = connection.accounts[0];
-          } else if (coinbaseConnector) {
-            const connection = await connectAsync({ connector: coinbaseConnector });
-            connectedAddress = connection.accounts[0];
+            if (connectedAddress) {
+              break;
+            }
+          } catch {
+            // Continue to the next connector candidate.
           }
-        } catch (e) {
-          console.error("Connection failed", e);
         }
       }
       if (!connectedAddress) {
@@ -359,7 +382,12 @@ function CreateAccountFlow({ onComplete }: { onComplete: (profile: StoredProfile
 
           {step === 0 ? (
             <div className="dv-profile-card dv-auth-grid dv-auth-grid--account">
-              <p className="dv-subcopy">Connected wallet: <strong>{authWalletAddress ?? address ?? "Not connected"}</strong></p>
+              <p className="dv-subcopy">
+                Connected wallet:{" "}
+                <strong className="dv-wallet-value" title={authWalletAddress ?? address ?? "Not connected"}>
+                  {formatWalletDisplay(authWalletAddress ?? address ?? null)}
+                </strong>
+              </p>
               <button type="button" className="dv-btn-primary dv-auth-btn dv-auth-btn--brand" onClick={() => void signInWithEthereum()} disabled={isSigningIn}>
                 <FaEthereum className="dv-auth-btn-icon" aria-hidden="true" />
                 <span className="dv-auth-btn-label">{isSigningIn ? "Signing In..." : "Sign In with Ethereum"}</span>
@@ -371,7 +399,9 @@ function CreateAccountFlow({ onComplete }: { onComplete: (profile: StoredProfile
             <div className="dv-profile-card dv-auth-grid">
               <p className="dv-subcopy">Connect Coinbase Wallet now, or skip and connect later in settings.</p>
               <div className="dv-profile-row">
-                <strong>{walletAddress ?? "No wallet connected"}</strong>
+                <strong className="dv-wallet-value" title={walletAddress ?? "No wallet connected"}>
+                  {walletAddress ? formatWalletDisplay(walletAddress) : "No wallet connected"}
+                </strong>
                 <button type="button" className="dv-btn-light dv-auth-btn" onClick={connectCoinbase}>
                   <FaWallet className="dv-auth-btn-icon" aria-hidden="true" />
                   <span className="dv-auth-btn-label">Connect Coinbase</span>
@@ -428,7 +458,9 @@ function CreateAccountFlow({ onComplete }: { onComplete: (profile: StoredProfile
               </div>
               <div className="dv-profile-row">
                 <span>Wallet</span>
-                <strong>{walletAddress ?? (skipWallet ? "Skipped" : "Not connected")}</strong>
+                <strong className="dv-wallet-value" title={walletAddress ?? (skipWallet ? "Skipped" : "Not connected")}>
+                  {walletAddress ? formatWalletDisplay(walletAddress) : skipWallet ? "Skipped" : "Not connected"}
+                </strong>
               </div>
               <div className="dv-profile-row">
                 <span>Recipients</span>

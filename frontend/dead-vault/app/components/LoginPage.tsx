@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConnect } from "wagmi";
-import { injected } from "wagmi/connectors";
 import { FaArrowLeftLong, FaEthereum, FaWallet } from "react-icons/fa6";
 import {
   AUTH_PROFILE_STORAGE_KEY,
@@ -37,6 +36,9 @@ function getReadableAuthError(error: unknown): string {
 
     const maybeMessage = (error as { message?: string }).message;
     if (maybeMessage) {
+      if (maybeMessage.toLowerCase().includes("crypto.subtle") || maybeMessage.toLowerCase().includes("generatekey")) {
+        return "Secure crypto APIs are unavailable in this browser context. Use HTTPS, a native dApp browser, or WalletConnect.";
+      }
       if (maybeMessage.toLowerCase().includes("failed to fetch")) {
         return "Backend unreachable. Check NEXT_PUBLIC_API_BASE_URL and backend status.";
       }
@@ -58,17 +60,23 @@ export function LoginPage() {
   const [selectedWalletAddress, setSelectedWalletAddress] = useState<string | null>(null);
   const [isSwitchingWallet, setIsSwitchingWallet] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [hasProfile, setHasProfile] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-    setHasProfile(Boolean(localStorage.getItem(AUTH_PROFILE_STORAGE_KEY)));
-  }, []);
+  const [hasProfile] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return Boolean(localStorage.getItem(AUTH_PROFILE_STORAGE_KEY));
+  });
 
   const requestWalletSelection = async (): Promise<string | null> => {
     const provider = getEthereumProvider();
     let connectedAddress: string | undefined;
+    const injectedConnector = connectors.find((connector) => connector.id === "injected");
+    const walletConnectConnector = connectors.find((connector) => connector.id === "walletConnect");
+    const coinbaseConnector = connectors.find((connector) => connector.id === "coinbaseWalletSDK");
+    const canUseCoinbaseSdk =
+      typeof window !== "undefined" &&
+      window.isSecureContext &&
+      typeof window.crypto?.subtle !== "undefined";
 
     if (provider) {
       try {
@@ -89,20 +97,22 @@ export function LoginPage() {
     }
 
     if (!connectedAddress) {
-      // Try injected first (for DApp browsers), then fallback to Coinbase Wallet SDK (for mobile linking/QR)
-      const injectedConnector = connectors.find(c => c.id === 'injected');
-      const coinbaseConnector = connectors.find(c => c.id === 'coinbaseWalletSDK');
-      
-      try {
-        if (injectedConnector && (window as any).ethereum) {
-          const connection = await connectAsync({ connector: injectedConnector });
+      const candidateConnectors = [
+        injectedConnector,
+        walletConnectConnector,
+        canUseCoinbaseSdk ? coinbaseConnector : undefined,
+      ].filter((connector): connector is NonNullable<typeof connector> => Boolean(connector));
+
+      for (const connector of candidateConnectors) {
+        try {
+          const connection = await connectAsync({ connector });
           connectedAddress = connection.accounts[0];
-        } else if (coinbaseConnector) {
-          const connection = await connectAsync({ connector: coinbaseConnector });
-          connectedAddress = connection.accounts[0];
+          if (connectedAddress) {
+            break;
+          }
+        } catch {
+          // Continue to the next connector candidate.
         }
-      } catch (e) {
-        console.error("Connection failed", e);
       }
     }
 
@@ -130,14 +140,9 @@ export function LoginPage() {
     setError("");
     setIsSigningIn(true);
     const raw = localStorage.getItem(AUTH_PROFILE_STORAGE_KEY);
-    if (!raw) {
-      setError("No account found. Please create an account first.");
-      setIsSigningIn(false);
-      return;
-    }
+    const stored = raw ? (JSON.parse(raw) as StoredProfile) : null;
 
     try {
-      const stored = JSON.parse(raw) as StoredProfile;
       const connectedAddress = selectedWalletAddress ?? (await requestWalletSelection());
 
       if (!connectedAddress) {
@@ -145,12 +150,29 @@ export function LoginPage() {
         return;
       }
 
-      if ((stored.authWalletAddress ?? "").toLowerCase() !== connectedAddress.toLowerCase()) {
+      if (stored && (stored.authWalletAddress ?? "").toLowerCase() !== connectedAddress.toLowerCase()) {
         setError("Connected wallet does not match this account.");
         return;
       }
 
       await signIn(connectedAddress);
+
+      if (!stored) {
+        const bootstrappedProfile: StoredProfile = {
+          authWalletAddress: connectedAddress,
+          walletAddress: connectedAddress,
+          recipients: [],
+          contracts: [],
+          skipped: {
+            wallet: false,
+            recipients: true,
+          },
+          onboardingCompleted: true,
+          createdAt: new Date().toISOString(),
+        };
+        localStorage.setItem(AUTH_PROFILE_STORAGE_KEY, JSON.stringify(bootstrappedProfile));
+      }
+
       router.replace("/");
     } catch (error: unknown) {
       setError(getReadableAuthError(error));
@@ -158,18 +180,6 @@ export function LoginPage() {
       setIsSigningIn(false);
     }
   };
-
-  if (!isMounted) {
-    return (
-      <main className="dv-main">
-        <section className="dv-auth-wrap">
-          <div className="dv-auth-shell dv-screen">
-             <p className="dv-label">AUTHENTICATING...</p>
-          </div>
-        </section>
-      </main>
-    );
-  }
 
   return (
     <main className="dv-main">
