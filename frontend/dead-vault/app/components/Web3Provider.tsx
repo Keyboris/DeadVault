@@ -12,8 +12,6 @@ const wagmiConfig = createConfig({
     injected(),
     coinbaseWallet({
       appName: "DeadVault",
-      preference: "all",
-      version: "4",
     }),
   ],
   transports: {

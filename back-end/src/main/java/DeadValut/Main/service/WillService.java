@@ -135,7 +135,16 @@ public class WillService {
         contract.setDeploymentTxHash(txHash);
         contract.setVaultType(vaultType);
         contract.setStatus("ACTIVE");
+
+        if (deploymentParams instanceof VaultDeploymentParams.Multisig m) {
+            contract.setOwners(String.join(",", m.owners()));
+            contract.setThreshold(m.threshold());
+            contract.setInactivitySeconds(m.inactivitySeconds());
+            contract.setGraceSeconds(m.graceSeconds());
+        }
+
         try {
+
             contractRepo.save(contract);
         } catch (DataIntegrityViolationException e) {
             config.setStatus("FAILED");

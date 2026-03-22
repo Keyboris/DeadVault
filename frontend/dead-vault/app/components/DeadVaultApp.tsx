@@ -8,7 +8,6 @@ import {
   checkIn,
   getCheckInStatus,
   getContracts as getContractsRequest,
-  getVaultBalance,
   sendWillNotification,
   submitWill as submitWillRequest,
   updateWill as updateWillRequest,
@@ -21,12 +20,11 @@ import {
   FaAt,
   FaBuildingColumns,
   FaChevronRight,
+  FaCircleCheck,
   FaCircleInfo,
   FaClock,
   FaGear,
-  FaEnvelope,
   FaFileContract,
-  FaFingerprint,
   FaHeartPulse,
   FaKey,
   FaLock,
@@ -34,10 +32,47 @@ import {
   FaPlus,
   FaShieldHalved,
   FaTableCellsLarge,
+  FaTriangleExclamation,
   FaWallet,
 } from "react-icons/fa6";
 
 type ScreenName = "home" | "payment" | "address" | "settings";
+
+const MULTISIG_ABI = [
+  "function owners() view returns (address[])",
+  "function threshold() view returns (uint256)",
+  "function getModules() view returns (address[])",
+  "function isModuleEnabled(address) view returns (bool)"
+];
+
+const DEADMAN_ABI = [
+  "function checkIn() external",
+  "function startGracePeriod() external",
+  "function trigger() external",
+  "function nominee() view returns (address)",
+  "function inactivityPeriod() view returns (uint256)",
+  "function gracePeriod() view returns (uint256)",
+  "function lastCheckIn() view returns (uint256)",
+  "function gracePeriodStart() view returns (uint256)",
+  "function isTriggered() view returns (bool)"
+];
+
+const HOME_HERO_TEXT = "MONEY HAS NO VALUE IN DEATH";
+
+
+function TypingHeroTitle({
+  text,
+  className,
+}: {
+  text: string;
+  className: string;
+}) {
+  return (
+    <h1 className={className} aria-label={text}>
+      {text}
+    </h1>
+  );
+}
 
 function formatCountdown(isoTime: string | null, currentMs: number): string {
   if (!isoTime) {
@@ -182,6 +217,7 @@ export function DeadVaultApp({
 }) {
   const [screen, setScreen] = useState<ScreenName>("home");
   const [desktop, setDesktop] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [autoTrigger, setAutoTrigger] = useState(true);
   const [privacyShield, setPrivacyShield] = useState(false);
   const [securityAlerts, setSecurityAlerts] = useState(true);
@@ -201,29 +237,62 @@ export function DeadVaultApp({
   const [contractsError, setContractsError] = useState("");
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [statusError, setStatusError] = useState("");
+  const [statusSuccess, setStatusSuccess] = useState("");
+  const [toasts, setToasts] = useState<{ id: string; type: 'success' | 'error'; title: string; message: string }[]>([]);
+
+  const addToast = (type: 'success' | 'error', title: string, message: string) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, type, title, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 8000);
+  };
+
   const [statusText, setStatusText] = useState("UNKNOWN");
   const [contractStatus, setContractStatus] = useState("UNKNOWN");
   const [vaultValueEth, setVaultValueEth] = useState("0");
   const [vaultValueError, setVaultValueError] = useState("");
   const [nextDueAt, setNextDueAt] = useState<string | null>(null);
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
-  const [clockTick, setClockTick] = useState(Date.now());
+  const [clockTick, setClockTick] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
   const countdownText = formatCountdown(nextDueAt, clockTick);
 
   const mapContractSummaryToVaultContract = (contract: ContractSummaryResponse): VaultContract => {
     const primaryLabel = contract.beneficiaries[0]?.label ?? "No beneficiary labels";
+    const basisSummary = contract.beneficiaries.length
+      ? contract.beneficiaries
+          .map((b) => `${b.label || shortAddress(b.walletAddress)} ${(b.basisPoints / 100).toFixed(2)}%`)
+          .join(" | ")
+      : "No beneficiary basis configured";
     const title = `${contract.vaultType} • ${shortAddress(contract.contractAddress)}`;
-    const content = `Status: ${contract.status}\nPrimary beneficiary: ${primaryLabel}\nContract: ${contract.contractAddress}\nTx: ${contract.deploymentTxHash}`;
+    
+    let content = `Status: ${contract.status}\nBalance: ${contract.ethBalanceEther} ETH\nPrimary beneficiary: ${primaryLabel}\nBasis: ${basisSummary}\nContract: ${contract.contractAddress}\nTx: ${contract.deploymentTxHash}`;
+    
+    if (contract.vaultType === "MULTISIG_DEADMAN") {
+      const ownersList = contract.owners?.map(shortAddress).join(", ") ?? "Unknown";
+      content += `\nOwners: ${ownersList}\nThreshold: ${contract.threshold}-of-${contract.owners?.length ?? "?"}`;
+    }
+
     return {
       id: contract.id,
       title,
       content,
       createdAt: contract.deployedAt,
       updatedAt: contract.deployedAt,
+      vaultType: contract.vaultType,
+      contractAddress: contract.contractAddress,
+      owners: contract.owners,
+      threshold: contract.threshold,
+      inactivitySeconds: contract.inactivitySeconds,
+      graceSeconds: contract.graceSeconds,
+      ethBalanceEther: contract.ethBalanceEther,
     };
   };
+
+
+  const [activeVaultType, setActiveVaultType] = useState<string>("STANDARD");
 
   const refreshContracts = useCallback(async () => {
     const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
@@ -240,33 +309,20 @@ export function DeadVaultApp({
       const mapped = response.map(mapContractSummaryToVaultContract);
       setContracts(mapped);
       setContractsError("");
-      setContractStatus(response[0]?.status ?? "NO_VAULT");
+      const activeContract = response.find((c) => c.status === "ACTIVE") ?? response[0];
+      setContractStatus(activeContract?.status ?? "NO_VAULT");
+      setActiveVaultType(activeContract?.vaultType ?? "STANDARD");
+      setVaultValueEth(activeContract?.ethBalanceEther ?? "0");
+      setVaultValueError("");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Contract list is temporarily unavailable.";
       setContractsError(message);
       setContracts([]);
       setContractStatus("UNAVAILABLE");
+      setVaultValueEth("0");
+      setVaultValueError(message);
     } finally {
       setIsLoadingContracts(false);
-    }
-  }, []);
-
-  const refreshVaultValue = useCallback(async () => {
-    const token = localStorage.getItem(DMS_TOKEN_STORAGE_KEY);
-    if (!token) {
-      setVaultValueEth("0");
-      setVaultValueError("");
-      return;
-    }
-
-    try {
-      const balance = await getVaultBalance();
-      setVaultValueEth(balance.ethBalanceEther);
-      setVaultValueError("");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Vault value unavailable.";
-      setVaultValueError(message);
-      setVaultValueEth("0");
     }
   }, []);
 
@@ -303,18 +359,108 @@ export function DeadVaultApp({
 
     setIsCheckingIn(true);
     try {
+      if (activeVaultType === "MULTISIG_DEADMAN") {
+        // Direct on-chain check-in for multisig
+        const provider = getEthereumProvider();
+        if (!provider) throw new Error("No wallet provider found");
+        
+        const { BrowserProvider, Contract } = await import("ethers");
+        const ethersProvider = new BrowserProvider(provider as any);
+        const signer = await ethersProvider.getSigner();
+        
+        // Find the active contract
+        const apiContracts = await getContractsRequest();
+        const active = apiContracts.find(c => c.status === "ACTIVE" && c.vaultType === "MULTISIG_DEADMAN");
+        if (!active) throw new Error("No active multisig vault found");
+
+        const multisigAddress = active.contractAddress;
+        const multisig = new Contract(multisigAddress, MULTISIG_ABI, signer);
+        const modules = await multisig.getModules();
+        if (!modules || modules.length === 0) throw new Error("No modules found on multisig");
+        
+        // For simplicity, assume the first module is DeadmanModule
+        const deadmanAddress = modules[0];
+        const deadman = new Contract(deadmanAddress, DEADMAN_ABI, signer);
+        
+        const tx = await deadman.checkIn();
+        await tx.wait();
+      }
+
+      // Also notify backend to update its cached status
       const response = await checkIn();
       setNextDueAt(response.nextDueAt);
       setStatusText("ACTIVE");
       setStatusError("");
       await refreshCheckInStatus();
+      await refreshContracts();
+      addToast('success', 'Check-in Recorded', 'Your vault timer has been reset successfully.');
     } catch (error) {
       const message = error instanceof Error ? error.message : "Check-in failed. Please try again.";
-      setStatusError(message);
+      addToast('error', 'Check-in Failed', message);
+    } finally {
+    setIsCheckingIn(false);
+    }
+  };
+
+  const handleStartGracePeriod = async () => {
+    setIsCheckingIn(true);
+    try {
+      const provider = getEthereumProvider();
+      if (!provider) throw new Error("No wallet provider found");
+      const { BrowserProvider, Contract } = await import("ethers");
+      const ethersProvider = new BrowserProvider(provider as any);
+      const signer = await ethersProvider.getSigner();
+      
+      const apiContracts = await getContractsRequest();
+      const active = apiContracts.find(c => c.status === "ACTIVE" && c.vaultType === "MULTISIG_DEADMAN");
+      if (!active) throw new Error("No active multisig vault found");
+
+      const multisig = new Contract(active.contractAddress, MULTISIG_ABI, signer);
+      const modules = await multisig.getModules();
+      const deadman = new Contract(modules[0], DEADMAN_ABI, signer);
+      
+      const tx = await deadman.startGracePeriod();
+      await tx.wait();
+      await refreshCheckInStatus();
+      addToast('success', 'Grace Period Started', 'The grace period has been initiated on-chain.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Start grace period failed";
+      addToast('error', 'Action Failed', message);
     } finally {
       setIsCheckingIn(false);
     }
   };
+
+  const handleTrigger = async () => {
+    setIsCheckingIn(true);
+    try {
+      const provider = getEthereumProvider();
+      if (!provider) throw new Error("No wallet provider found");
+      const { BrowserProvider, Contract } = await import("ethers");
+      const ethersProvider = new BrowserProvider(provider as any);
+      const signer = await ethersProvider.getSigner();
+      
+      const apiContracts = await getContractsRequest();
+      const active = apiContracts.find(c => c.status === "ACTIVE" && c.vaultType === "MULTISIG_DEADMAN");
+      if (!active) throw new Error("No active multisig vault found");
+
+      const multisig = new Contract(active.contractAddress, MULTISIG_ABI, signer);
+      const modules = await multisig.getModules();
+      const deadman = new Contract(modules[0], DEADMAN_ABI, signer);
+      
+      const tx = await deadman.trigger();
+      await tx.wait();
+      await refreshCheckInStatus();
+      await refreshContracts();
+      addToast('success', 'Vault Triggered', 'The redistribution process has been triggered on-chain.');
+    } catch (error) {
+      addToast('error', 'Trigger Failed', error instanceof Error ? error.message : "Trigger failed");
+    } finally {
+      setIsCheckingIn(false);
+    }
+  };
+
+
 
   const navigateToScreen = (nextScreen: ScreenName) => {
     setScreen(nextScreen);
@@ -401,16 +547,18 @@ export function DeadVaultApp({
 
       await refreshContracts();
       resetWillForm();
-      if (notificationMessage) {
-        setWillError(notificationMessage);
+      if (notificationMessage && !notificationMessage.includes("No email found")) {
+        addToast('success', 'Will Updated', notificationMessage);
+      } else {
+        addToast('success', 'Success', 'Your will has been saved successfully.');
       }
     } catch (error) {
       if (editingContractId && error instanceof ApiClientError && (error.status === 404 || error.status === 405)) {
-        setWillError("Will update is not enabled on this backend yet. Create a new will or enable PUT /api/will.");
+        addToast('error', 'Update Not Supported', "Will update is not enabled on this backend yet. Create a new will or enable PUT /api/will.");
         return;
       }
       const message = error instanceof Error ? error.message : "Will submission failed. Please try again.";
-      setWillError(message);
+      addToast('error', 'Submission Failed', message);
     } finally {
       setIsSubmittingWill(false);
     }
@@ -424,7 +572,7 @@ export function DeadVaultApp({
   };
 
   const handleDeleteContract = () => {
-    setWillError("Contract deletion is not available in the current API.");
+    addToast('error', 'Feature Unavailable', "Contract deletion is not available in the current API.");
   };
 
   const validateBaseNetwork = (chainId: string | null) => {
@@ -496,6 +644,7 @@ export function DeadVaultApp({
   };
 
   useEffect(() => {
+    setIsMounted(true);
     const media = window.matchMedia("(min-width: 1024px)");
     const update = () => {
       const isDesktop = media.matches;
@@ -601,6 +750,7 @@ export function DeadVaultApp({
   }, [screen, desktop]);
 
   useEffect(() => {
+    setClockTick(Date.now());
     const timer = setInterval(() => {
       setClockTick(Date.now());
     }, 1000);
@@ -619,16 +769,75 @@ export function DeadVaultApp({
     void refreshContracts();
   }, [refreshContracts]);
 
-  useEffect(() => {
-    void refreshVaultValue();
-    const poll = setInterval(() => {
-      void refreshVaultValue();
-    }, 45000);
-    return () => clearInterval(poll);
-  }, [refreshVaultValue]);
+  if (!isMounted) {
+    return <div className="dv-root" style={{ minHeight: '100vh', background: '#000' }} />;
+  }
 
   return (
-    <div className="dv-root">
+    <div className="dv-root" style={{ position: 'relative', minHeight: '100vh' }}>
+      {/* Toast Overlay - Premium Glassmorphism */}
+      <div 
+        className="dv-toast-container" 
+        style={{ 
+          position: 'fixed', 
+          top: '24px', 
+          right: '24px', 
+          zIndex: 999999, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '12px', 
+          pointerEvents: 'none',
+          maxWidth: 'calc(100vw - 48px)'
+        }}
+      >
+        {toasts.map((toast) => (
+          <div 
+            key={toast.id} 
+            className={`dv-toast is-${toast.type}`}
+            style={{
+              pointerEvents: 'auto',
+              minWidth: desktop ? '360px' : 'auto',
+              width: desktop ? 'auto' : '100%',
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderLeft: `5px solid ${toast.type === 'success' ? '#10b981' : '#ef4444'}`,
+              borderRadius: '14px',
+              padding: '14px 18px',
+              boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.15)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '14px',
+              animation: 'dv-toast-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              color: '#111'
+            }}
+          >
+            <div style={{ 
+              fontSize: '22px', 
+              marginTop: '2px',
+              color: toast.type === 'success' ? '#10b981' : '#ef4444' 
+            }}>
+              {toast.type === 'success' ? '✓' : '⚠'}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ 
+                fontWeight: '700', 
+                fontSize: '14px', 
+                color: '#000',
+                letterSpacing: '0.02em',
+                marginBottom: '2px'
+              }}>
+                {toast.title.toUpperCase()}
+              </div>
+              <div style={{ fontSize: '13px', color: '#555', lineHeight: '1.4' }}>
+                {toast.message}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <header className="dv-topbar">
         <div className="dv-brand-wrap">
           <FaLock className="dv-icon-inline dv-blue" aria-hidden="true" />
@@ -717,18 +926,27 @@ export function DeadVaultApp({
             <DesktopNotifications
               statusText={statusText}
               statusError={statusError}
+              statusSuccess={statusSuccess}
               isCheckingIn={isCheckingIn}
               onCheckIn={handleCheckIn}
+              vaultType={activeVaultType}
+              onStartGrace={handleStartGracePeriod}
+              onTrigger={handleTrigger}
             />
           ) : (
             <MobileNotifications
               statusText={statusText}
               statusError={statusError}
+              statusSuccess={statusSuccess}
               isCheckingIn={isCheckingIn}
               onCheckIn={handleCheckIn}
+              vaultType={activeVaultType}
+              onStartGrace={handleStartGracePeriod}
+              onTrigger={handleTrigger}
             />
           )
         ) : null}
+
 
         {screen === "address" ? (
           desktop ? (
@@ -740,7 +958,6 @@ export function DeadVaultApp({
               contractStatus={contractStatus}
               onToggleAuto={() => setAutoTrigger((v) => !v)}
               onTogglePrivacy={() => setPrivacyShield((v) => !v)}
-              onOpenAction={openActionPage}
               onConnectWallet={connectCoinbaseWallet}
               onChangeWallet={changeCoinbaseWallet}
               onDisconnectWallet={disconnectCoinbaseWallet}
@@ -754,7 +971,6 @@ export function DeadVaultApp({
               contractStatus={contractStatus}
               onToggleAuto={() => setAutoTrigger((v) => !v)}
               onTogglePrivacy={() => setPrivacyShield((v) => !v)}
-              onOpenAction={openActionPage}
               onConnectWallet={connectCoinbaseWallet}
               onChangeWallet={changeCoinbaseWallet}
               onDisconnectWallet={disconnectCoinbaseWallet}
@@ -876,7 +1092,7 @@ function MobileDashboard({
         <p className="dv-subcopy">Status: {checkInStatus}{daysRemaining !== null ? ` (${daysRemaining}d)` : ""}</p>
       </div>
 
-      <h1 className="dv-hero-title">MONEY HAS NO VALUE IN DEATH</h1>
+      <TypingHeroTitle className="dv-hero-title" text={HOME_HERO_TEXT} />
 
       <div className="dv-contract-card">
         <div className="dv-card-head">
@@ -978,7 +1194,7 @@ function DesktopDashboard({
           <h2 className="dv-countdown dv-desktop-count">{countdownText}</h2>
           <p className="dv-subcopy">Status: {checkInStatus}{daysRemaining !== null ? ` (${daysRemaining}d)` : ""}</p>
         </div>
-        <h1 className="dv-hero-title dv-desktop-hero">MONEY HAS NO VALUE IN DEATH</h1>
+        <TypingHeroTitle className="dv-hero-title dv-desktop-hero" text={HOME_HERO_TEXT} />
 
         <div className="dv-vault-card">
           <div className="dv-balance-head">
@@ -1133,14 +1349,23 @@ function WillSection({
 function MobileNotifications({
   statusText,
   statusError,
+  statusSuccess,
   isCheckingIn,
   onCheckIn,
+  vaultType,
+  onStartGrace,
+  onTrigger,
 }: {
   statusText: string;
   statusError: string;
+  statusSuccess: string;
   isCheckingIn: boolean;
   onCheckIn: () => void;
+  vaultType: string;
+  onStartGrace: () => void;
+  onTrigger: () => void;
 }) {
+
   return (
     <section className="dv-mobile-stack">
       <h1 className="dv-hero-title">PAYMENT ACTIVITY</h1>
@@ -1149,9 +1374,21 @@ function MobileNotifications({
         <span>CHECK-IN</span>
         <p className="dv-subcopy">Current status: {statusText}</p>
         {statusError ? <p className="dv-inline-error">{statusError}</p> : null}
+        {statusSuccess ? <p className="dv-inline-success" style={{ color: '#00ff00', fontSize: '0.85rem', marginTop: '0.25rem' }}>{statusSuccess}</p> : null}
         <button type="button" className="dv-btn-primary dv-checkin-btn" onClick={onCheckIn} disabled={isCheckingIn}>
-          {isCheckingIn ? "Checking In..." : "I Am Alive"}
+          {isCheckingIn ? "Processing..." : "I Am Alive"}
         </button>
+        {vaultType === "MULTISIG_DEADMAN" && (
+          <div className="dv-multisig-actions" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button type="button" className="dv-btn-light" style={{ flex: 1 }} onClick={onStartGrace} disabled={isCheckingIn}>
+              Start Grace
+            </button>
+            <button type="button" className="dv-btn-light is-danger" style={{ flex: 1 }} onClick={onTrigger} disabled={isCheckingIn}>
+              Trigger
+            </button>
+          </div>
+        )}
+
       </div>
       <div className="dv-list">
         {mobileEvents.map((event) => (
@@ -1175,14 +1412,23 @@ function MobileNotifications({
 function DesktopNotifications({
   statusText,
   statusError,
+  statusSuccess,
   isCheckingIn,
   onCheckIn,
+  vaultType,
+  onStartGrace,
+  onTrigger,
 }: {
   statusText: string;
   statusError: string;
+  statusSuccess: string;
   isCheckingIn: boolean;
   onCheckIn: () => void;
+  vaultType: string;
+  onStartGrace: () => void;
+  onTrigger: () => void;
 }) {
+
   return (
     <section className="dv-desktop-stack">
       <h1 className="dv-hero-title dv-desktop-hero">PAYMENT ACTIVITY</h1>
@@ -1191,9 +1437,21 @@ function DesktopNotifications({
         <span>CHECK-IN</span>
         <p className="dv-subcopy">Current status: {statusText}</p>
         {statusError ? <p className="dv-inline-error">{statusError}</p> : null}
+        {statusSuccess ? <p className="dv-inline-success" style={{ color: '#00ff00', fontSize: '0.85rem', marginTop: '0.25rem' }}>{statusSuccess}</p> : null}
         <button type="button" className="dv-btn-primary dv-checkin-btn" onClick={onCheckIn} disabled={isCheckingIn}>
-          {isCheckingIn ? "Checking In..." : "I Am Alive"}
+          {isCheckingIn ? "Processing..." : "I Am Alive"}
         </button>
+        {vaultType === "MULTISIG_DEADMAN" && (
+          <div className="dv-multisig-actions" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button type="button" className="dv-btn-light" style={{ flex: 1 }} onClick={onStartGrace} disabled={isCheckingIn}>
+              Start Grace Period
+            </button>
+            <button type="button" className="dv-btn-light is-danger" style={{ flex: 1 }} onClick={onTrigger} disabled={isCheckingIn}>
+              Trigger Redistribution
+            </button>
+          </div>
+        )}
+
       </div>
       <div className="dv-list">
         {desktopEvents.map((event) => (
@@ -1231,7 +1489,6 @@ type ProfileProps = {
   contractStatus: string;
   onToggleAuto: () => void;
   onTogglePrivacy: () => void;
-  onOpenAction: (slug: string) => void;
   onConnectWallet: () => void;
   onChangeWallet: () => void;
   onDisconnectWallet: () => void;
@@ -1253,7 +1510,7 @@ type SettingsProps = {
   onLogout?: () => void;
 };
 
-function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError, contractStatus, onToggleAuto, onTogglePrivacy, onOpenAction, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
+function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError, contractStatus, onToggleAuto, onTogglePrivacy, onConnectWallet, onChangeWallet, onDisconnectWallet }: ProfileProps) {
   return (
     <section className="dv-mobile-stack">
       <h1 className="dv-hero-title">ADDRESS SETTINGS</h1>
@@ -1288,29 +1545,6 @@ function MobileProfile({ autoTrigger, privacyShield, walletAddress, walletError,
           </div>
           <button type="button" className={privacyShield ? "toggle on" : "toggle"} onClick={onTogglePrivacy}><i /></button>
         </div>
-      </div>
-      <h2 className="dv-section-title">VERIFICATION</h2>
-      <div className="dv-mobile-verification">
-        <article>
-          <div className="dv-event-main">
-            <span className="dv-event-icon-wrap"><FaFingerprint className="dv-event-icon" aria-hidden="true" /></span>
-            <div>
-              <h3>Biometric Auth</h3>
-              <p>Linked to hardware enclave</p>
-            </div>
-          </div>
-          <strong>✓</strong>
-        </article>
-        <article>
-          <div className="dv-event-main">
-            <span className="dv-event-icon-wrap"><FaEnvelope className="dv-event-icon" aria-hidden="true" /></span>
-            <div>
-              <h3>Backup Email</h3>
-              <p>Not configured</p>
-            </div>
-          </div>
-          <button type="button" className="dv-mini-action" onClick={() => onOpenAction("add-backup-email")}>ADD</button>
-        </article>
       </div>
     </section>
   );
@@ -1352,25 +1586,6 @@ function DesktopProfile({ autoTrigger, privacyShield, walletAddress, walletError
               <p>Mask metadata across the ledger network</p>
             </div>
             <button type="button" className={privacyShield ? "toggle on" : "toggle"} onClick={onTogglePrivacy}><i /></button>
-          </div>
-        </div>
-        <div className="dv-profile-card">
-          <span>IDENTITY VERIFICATION</span>
-          <div className="dv-verify-grid">
-            <article>
-              <span><FaFingerprint aria-hidden="true" /></span>
-              <div>
-                <h4>Biometric Auth</h4>
-                <p>SECURED</p>
-              </div>
-            </article>
-            <article>
-              <span><FaAt aria-hidden="true" /></span>
-              <div>
-                <h4>Backup Email</h4>
-                <p>VERIFIED</p>
-              </div>
-            </article>
           </div>
         </div>
       </div>

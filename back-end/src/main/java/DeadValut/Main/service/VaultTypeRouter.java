@@ -41,8 +41,19 @@ public class VaultTypeRouter {
                 yield new VaultDeploymentParams.Conditional(wallets, basisPoints, mustSurvive);
             }
 
+            case "MULTISIG_DEADMAN" -> {
+                int threshold = extraction.threshold() > 0 ? extraction.threshold() : 1;
+                int inactivity = extraction.inactivitySeconds() > 0 ? extraction.inactivitySeconds() : 2592000;
+                int grace = extraction.graceSeconds() > 0 ? extraction.graceSeconds() : 604800;
+                List<String> owners = extraction.owners() != null && !extraction.owners().isEmpty() 
+                    ? extraction.owners() 
+                    : List.of(extraction.resolvedBeneficiaries().get(0).walletAddress());
+                yield new VaultDeploymentParams.Multisig(owners, threshold, inactivity, grace, wallets, basisPoints);
+            }
+
             default -> throw new IllegalArgumentException(
                 "Unrecognised templateType: " + extraction.templateType());
+
         };
     }
 }

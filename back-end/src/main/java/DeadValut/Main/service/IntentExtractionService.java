@@ -26,6 +26,10 @@ public class IntentExtractionService {
             - CONDITIONAL_SURVIVAL  At least one beneficiary must prove they are still alive before they can claim.
                                     Set condition = "CONDITIONAL_SURVIVAL" for those beneficiaries and "ALWAYS" for
                                     unconditional ones. timeLockDays = 0.
+            - MULTISIG_DEADMAN      A self-sovereign multisig wallet where multiple owners must check in.
+                                    Required if the user mentions "multisig", "multiple owners", "2-of-3", etc.
+                                    Set threshold, inactivitySeconds (default 2592000 / 30 days),
+                                    and graceSeconds (default 604800 / 7 days).
 
             BASIS POINTS RULES:
             - All basisPoints values MUST sum to exactly 10000 (10000 = 100 percent).
@@ -35,11 +39,16 @@ public class IntentExtractionService {
             WALLET RULES:
             - If a 0x... address appears in the text next to a name, capture it in walletAddress.
             - Otherwise set walletAddress to null (the user will supply it in the UI).
+            - For MULTISIG_DEADMAN, distinguish between OWNERS (who manage the vault) and BENEFICIARIES (who receive funds).
 
             Respond ONLY with a JSON object in this exact shape — no markdown, no preamble:
             {
-              "templateType": "EQUAL_SPLIT | PERCENTAGE_SPLIT | TIME_LOCKED | CONDITIONAL_SURVIVAL",
+              "templateType": "EQUAL_SPLIT | PERCENTAGE_SPLIT | TIME_LOCKED | CONDITIONAL_SURVIVAL | MULTISIG_DEADMAN",
               "timeLockDays": 0,
+              "threshold": 0,
+              "inactivitySeconds": 0,
+              "graceSeconds": 0,
+              "owners": ["0x..."],
               "resolvedBeneficiaries": [
                 {
                   "name": "Alice",
@@ -53,6 +62,7 @@ public class IntentExtractionService {
               "validationErrors": [],
               "confidenceScore": 0.97
             }
+
 
             NOTE: timeLockDays at the top level mirrors the value for all beneficiaries in a
             TIME_LOCKED vault. Individual beneficiary timeLockDays should match the top-level value.
@@ -130,6 +140,10 @@ public class IntentExtractionService {
             return new IntentExtractionResult(
                 result.templateType(),
                 result.timeLockDays(),
+                result.threshold(),
+                result.inactivitySeconds(),
+                result.graceSeconds(),
+                result.owners(),
                 result.resolvedBeneficiaries(),
                 result.pendingResolution(),
                 errors,
@@ -138,9 +152,10 @@ public class IntentExtractionService {
 
         } catch (Exception e) {
             return new IntentExtractionResult(
-                "UNKNOWN", 0, List.of(), List.of(),
+                "UNKNOWN", 0, 0, 0, 0, List.of(), List.of(), List.of(),
                 List.of("Failed to parse LLM response: " + e.getMessage()), 0.0
             );
         }
+
     }
 }

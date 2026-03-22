@@ -30,6 +30,7 @@ public class AuthController {
         return new NonceResponse(walletAddress, nonce);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public TokenResponse verify(VerifyRequest request) {
         boolean valid = siweService.verifySignature(
             request.walletAddress(), request.nonce(), request.signature());

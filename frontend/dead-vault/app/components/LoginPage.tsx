@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConnect } from "wagmi";
@@ -52,18 +52,19 @@ function getReadableAuthError(error: unknown): string {
 
 export function LoginPage() {
   const router = useRouter();
-  const { connectAsync } = useConnect();
+  const { connectors, connectAsync } = useConnect();
   const { signIn } = useSiweAuth();
   const [error, setError] = useState("");
   const [selectedWalletAddress, setSelectedWalletAddress] = useState<string | null>(null);
   const [isSwitchingWallet, setIsSwitchingWallet] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [hasProfile] = useState<boolean>(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return Boolean(localStorage.getItem(AUTH_PROFILE_STORAGE_KEY));
-  });
+  const [hasProfile, setHasProfile] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    setHasProfile(Boolean(localStorage.getItem(AUTH_PROFILE_STORAGE_KEY)));
+  }, []);
 
   const requestWalletSelection = async (): Promise<string | null> => {
     const provider = getEthereumProvider();
@@ -88,8 +89,21 @@ export function LoginPage() {
     }
 
     if (!connectedAddress) {
-      const connection = await connectAsync({ connector: injected() });
-      connectedAddress = connection.accounts[0];
+      // Try injected first (for DApp browsers), then fallback to Coinbase Wallet SDK (for mobile linking/QR)
+      const injectedConnector = connectors.find(c => c.id === 'injected');
+      const coinbaseConnector = connectors.find(c => c.id === 'coinbaseWalletSDK');
+      
+      try {
+        if (injectedConnector && (window as any).ethereum) {
+          const connection = await connectAsync({ connector: injectedConnector });
+          connectedAddress = connection.accounts[0];
+        } else if (coinbaseConnector) {
+          const connection = await connectAsync({ connector: coinbaseConnector });
+          connectedAddress = connection.accounts[0];
+        }
+      } catch (e) {
+        console.error("Connection failed", e);
+      }
     }
 
     return connectedAddress ?? null;
@@ -144,6 +158,18 @@ export function LoginPage() {
       setIsSigningIn(false);
     }
   };
+
+  if (!isMounted) {
+    return (
+      <main className="dv-main">
+        <section className="dv-auth-wrap">
+          <div className="dv-auth-shell dv-screen">
+             <p className="dv-label">AUTHENTICATING...</p>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="dv-main">

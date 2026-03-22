@@ -34,14 +34,17 @@ import java.util.UUID;
 public class SecurityConfig {
 
     private final JwtService jwtService;
+    private final DeadValut.Main.repository.UserRepository userRepository;
     private final String allowedOrigins;
 
     public SecurityConfig(
             JwtService jwtService,
+            DeadValut.Main.repository.UserRepository userRepository,
             @Value("${dms.cors.allowed-origins:http://localhost:3000,http://127.0.0.1:3000,http://localhost:4173,http://127.0.0.1:4173,http://192.168.*:3000,http://192.168.*:4173,http://172.*:3000,http://172.*:4173}")
             String allowedOrigins
     ) {
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
         this.allowedOrigins = allowedOrigins;
     }
 
@@ -158,13 +161,15 @@ public class SecurityConfig {
                         if (jwtService.isValid(token)) {
                             UUID userId = jwtService.extractUserId(token);
 
-                            UsernamePasswordAuthenticationToken auth =
-                                new UsernamePasswordAuthenticationToken(
-                                    userId,   // principal — injected via @AuthenticationPrincipal
-                                    null,     // credentials — not needed post-authentication
-                                    List.of() // authorities — none required for this app
-                                );
-                            SecurityContextHolder.getContext().setAuthentication(auth);
+                            if (userRepository.existsById(userId)) {
+                                UsernamePasswordAuthenticationToken auth =
+                                    new UsernamePasswordAuthenticationToken(
+                                        userId,   // principal — injected via @AuthenticationPrincipal
+                                        null,     // credentials — not needed post-authentication
+                                        List.of() // authorities — none required for this app
+                                    );
+                                SecurityContextHolder.getContext().setAuthentication(auth);
+                            }
                         }
                     } catch (Exception ignored) {
                         // Invalid/expired token — SecurityContext stays empty → 403 downstream

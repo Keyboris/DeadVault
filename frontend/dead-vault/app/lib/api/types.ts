@@ -58,7 +58,14 @@ export type ContractSummaryResponse = {
   status: string;
   deployedAt: string;
   beneficiaries: BeneficiarySummary[];
+  ethBalanceWei: string;
+  ethBalanceEther: string;
+  owners?: string[];
+  threshold?: number;
+  inactivitySeconds?: number;
+  graceSeconds?: number;
 };
+
 
 export type TokenBalance = {
   tokenAddress: string;

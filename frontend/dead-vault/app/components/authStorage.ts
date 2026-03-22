@@ -10,7 +10,15 @@ export type VaultContract = {
   content: string;
   createdAt: string;
   updatedAt: string;
+  vaultType?: string;
+  contractAddress?: string;
+  owners?: string[];
+  threshold?: number;
+  inactivitySeconds?: number;
+  graceSeconds?: number;
+  ethBalanceEther?: string;
 };
+
 
 export type StoredProfile = {
   authWalletAddress: string;

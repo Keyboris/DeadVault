@@ -132,6 +132,7 @@ export function DeadVaultShell() {
     );
   }
 
+
   if (!profile) {
     if (hasExistingAccount) {
       return (
@@ -170,7 +171,7 @@ export function DeadVaultShell() {
 
 function CreateAccountFlow({ onComplete }: { onComplete: (profile: StoredProfile) => void }) {
   const { address } = useAccount();
-  const { connectAsync } = useConnect();
+  const { connectors, connectAsync } = useConnect();
   const { signIn } = useSiweAuth();
   const [step, setStep] = useState(0);
   const [authWalletAddress, setAuthWalletAddress] = useState<string | null>(null);
@@ -238,8 +239,21 @@ function CreateAccountFlow({ onComplete }: { onComplete: (profile: StoredProfile
       }
 
       if (!connectedAddress) {
-        const connection = await connectAsync({ connector: injected() });
-        connectedAddress = connection.accounts[0];
+        // Try injected first (for DApp browsers), then fallback to Coinbase Wallet SDK (for mobile linking/QR)
+        const injectedConnector = connectors.find(c => c.id === 'injected');
+        const coinbaseConnector = connectors.find(c => c.id === 'coinbaseWalletSDK');
+
+        try {
+          if (injectedConnector && (window as any).ethereum) {
+            const connection = await connectAsync({ connector: injectedConnector });
+            connectedAddress = connection.accounts[0];
+          } else if (coinbaseConnector) {
+            const connection = await connectAsync({ connector: coinbaseConnector });
+            connectedAddress = connection.accounts[0];
+          }
+        } catch (e) {
+          console.error("Connection failed", e);
+        }
       }
       if (!connectedAddress) {
         setFormError("Wallet connection failed.");

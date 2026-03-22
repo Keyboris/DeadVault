@@ -13,11 +13,10 @@ import "./DeadmanModule.sol";
  */
 contract MultiSigFactory {
 
-    event WalletCreated(
-        address indexed creator,
-        address wallet,
-        address deadmanModule
-    );
+    event VaultCreated(address indexed owner, address vault, uint8 vaultType);
+
+    // Mirrors VaultType enum in the Java back-end
+    uint8 public constant TYPE_MULTISIG = 3;
 
     // creator → wallet address
     mapping(address => address) public wallets;
@@ -67,7 +66,7 @@ contract MultiSigFactory {
 
         wallets[msg.sender] = walletAddr;
 
-        emit WalletCreated(msg.sender, walletAddr, moduleAddr);
+        emit VaultCreated(msg.sender, walletAddr, TYPE_MULTISIG);
     }
 
     function getWallet(address creator) external view returns (address) {
