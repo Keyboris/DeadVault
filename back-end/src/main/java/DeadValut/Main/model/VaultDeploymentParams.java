@@ -11,7 +11,8 @@ import java.util.List;
 public sealed interface VaultDeploymentParams
         permits VaultDeploymentParams.Standard,
                 VaultDeploymentParams.TimeLocked,
-                VaultDeploymentParams.Conditional {
+                VaultDeploymentParams.Conditional,
+                VaultDeploymentParams.Multisig {
 
     List<String>  wallets();
     List<Integer> basisPoints();
@@ -35,4 +36,16 @@ public sealed interface VaultDeploymentParams
             List<Integer>  basisPoints,
             List<Boolean>  mustSurviveOwner   // parallel to wallets — true = confirmation required
     ) implements VaultDeploymentParams {}
+
+    /** MULTISIG_DEADMAN — deploys MultiSigWallet + DeadmanModule via MultiSigFactory.createWalletWithDeadman() */
+    record Multisig(
+            List<String>  owners,             // wallet owners
+            int           threshold,          // multisig threshold
+            int           inactivitySeconds,  // deadman inactivity period
+            int           graceSeconds,       // deadman grace period
+            List<String>  beneficiaryWallets,
+            List<Integer> basisPoints
+    ) implements VaultDeploymentParams {
+        @Override public List<String> wallets() { return owners; }
+    }
 }

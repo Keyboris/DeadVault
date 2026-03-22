@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConnect } from "wagmi";
-import { injected } from "wagmi/connectors";
 import { FaArrowLeftLong, FaEthereum, FaWallet } from "react-icons/fa6";
 import {
   AUTH_PROFILE_STORAGE_KEY,
@@ -37,6 +36,9 @@ function getReadableAuthError(error: unknown): string {
 
     const maybeMessage = (error as { message?: string }).message;
     if (maybeMessage) {
+      if (maybeMessage.toLowerCase().includes("crypto.subtle") || maybeMessage.toLowerCase().includes("generatekey")) {
+        return "Secure crypto APIs are unavailable in this browser context. Use HTTPS, a native dApp browser, or WalletConnect.";
+      }
       if (maybeMessage.toLowerCase().includes("failed to fetch")) {
         return "Backend unreachable. Check NEXT_PUBLIC_API_BASE_URL and backend status.";
       }
@@ -52,7 +54,7 @@ function getReadableAuthError(error: unknown): string {
 
 export function LoginPage() {
   const router = useRouter();
-  const { connectAsync } = useConnect();
+  const { connectors, connectAsync } = useConnect();
   const { signIn } = useSiweAuth();
   const [error, setError] = useState("");
   const [selectedWalletAddress, setSelectedWalletAddress] = useState<string | null>(null);
@@ -68,6 +70,13 @@ export function LoginPage() {
   const requestWalletSelection = async (): Promise<string | null> => {
     const provider = getEthereumProvider();
     let connectedAddress: string | undefined;
+    const injectedConnector = connectors.find((connector) => connector.id === "injected");
+    const walletConnectConnector = connectors.find((connector) => connector.id === "walletConnect");
+    const coinbaseConnector = connectors.find((connector) => connector.id === "coinbaseWalletSDK");
+    const canUseCoinbaseSdk =
+      typeof window !== "undefined" &&
+      window.isSecureContext &&
+      typeof window.crypto?.subtle !== "undefined";
 
     if (provider) {
       try {
@@ -88,8 +97,23 @@ export function LoginPage() {
     }
 
     if (!connectedAddress) {
-      const connection = await connectAsync({ connector: injected() });
-      connectedAddress = connection.accounts[0];
+      const candidateConnectors = [
+        injectedConnector,
+        walletConnectConnector,
+        canUseCoinbaseSdk ? coinbaseConnector : undefined,
+      ].filter((connector): connector is NonNullable<typeof connector> => Boolean(connector));
+
+      for (const connector of candidateConnectors) {
+        try {
+          const connection = await connectAsync({ connector });
+          connectedAddress = connection.accounts[0];
+          if (connectedAddress) {
+            break;
+          }
+        } catch {
+          // Continue to the next connector candidate.
+        }
+      }
     }
 
     return connectedAddress ?? null;
@@ -116,14 +140,9 @@ export function LoginPage() {
     setError("");
     setIsSigningIn(true);
     const raw = localStorage.getItem(AUTH_PROFILE_STORAGE_KEY);
-    if (!raw) {
-      setError("No account found. Please create an account first.");
-      setIsSigningIn(false);
-      return;
-    }
+    const stored = raw ? (JSON.parse(raw) as StoredProfile) : null;
 
     try {
-      const stored = JSON.parse(raw) as StoredProfile;
       const connectedAddress = selectedWalletAddress ?? (await requestWalletSelection());
 
       if (!connectedAddress) {
@@ -131,12 +150,29 @@ export function LoginPage() {
         return;
       }
 
-      if ((stored.authWalletAddress ?? "").toLowerCase() !== connectedAddress.toLowerCase()) {
+      if (stored && (stored.authWalletAddress ?? "").toLowerCase() !== connectedAddress.toLowerCase()) {
         setError("Connected wallet does not match this account.");
         return;
       }
 
       await signIn(connectedAddress);
+
+      if (!stored) {
+        const bootstrappedProfile: StoredProfile = {
+          authWalletAddress: connectedAddress,
+          walletAddress: connectedAddress,
+          recipients: [],
+          contracts: [],
+          skipped: {
+            wallet: false,
+            recipients: true,
+          },
+          onboardingCompleted: true,
+          createdAt: new Date().toISOString(),
+        };
+        localStorage.setItem(AUTH_PROFILE_STORAGE_KEY, JSON.stringify(bootstrappedProfile));
+      }
+
       router.replace("/");
     } catch (error: unknown) {
       setError(getReadableAuthError(error));

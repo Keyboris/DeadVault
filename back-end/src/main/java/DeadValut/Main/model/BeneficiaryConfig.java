@@ -1,6 +1,8 @@
 // model/BeneficiaryConfig.java
 package DeadValut.Main.model;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -21,6 +23,10 @@ public class BeneficiaryConfig {
 
     @Column(name = "template_type", length = 50)
     private String templateType;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "resolved_params", columnDefinition = "jsonb")
+    private String resolvedParams;
 
     @Column(name = "confidence_score", precision = 4)
     private Double confidenceScore;
@@ -43,6 +49,8 @@ public class BeneficiaryConfig {
     public void setRawIntentText(String t)      { this.rawIntentText = t; }
     public String getTemplateType()             { return templateType; }
     public void setTemplateType(String t)       { this.templateType = t; }
+    public String getResolvedParams()           { return resolvedParams; }
+    public void setResolvedParams(String p)     { this.resolvedParams = p; }
     public Double getConfidenceScore()          { return confidenceScore; }
     public void setConfidenceScore(Double s)    { this.confidenceScore = s; }
     public String getStatus()                   { return status; }

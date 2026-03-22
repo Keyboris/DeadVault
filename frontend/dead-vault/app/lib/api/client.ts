@@ -11,6 +11,20 @@ export class ApiClientError extends Error {
   }
 }
 
+function sanitizeErrorMessage(raw: string | null | undefined): string {
+  if (!raw) {
+    return "Request failed";
+  }
+
+  const sanitized = raw
+    .replace(/https?:\/\/\S+/gi, "request")
+    .replace(/\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+\/\S+/gi, "request")
+    .replace(/\/api\/\S*/gi, "request")
+    .trim();
+
+  return sanitized || "Request failed";
+}
+
 function readToken(): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -19,7 +33,7 @@ function readToken(): string | null {
 }
 
 function clearTokenAndRedirectIfUnauthorized(status: number): void {
-  if (status !== 401 || typeof window === "undefined") {
+  if ((status !== 401 && status !== 403) || typeof window === "undefined") {
     return;
   }
 
@@ -50,11 +64,11 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   if (!response.ok) {
     clearTokenAndRedirectIfUnauthorized(response.status);
 
-    let message = response.statusText || "Request failed";
+    let message = sanitizeErrorMessage(response.statusText || "Request failed");
     try {
       const body = (await response.json()) as ApiErrorPayload;
       if (body?.error) {
-        message = body.error;
+        message = sanitizeErrorMessage(body.error);
       }
     } catch {
       // Ignore non-JSON error bodies.

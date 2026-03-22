@@ -2,6 +2,8 @@
 package DeadValut.Main.model;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.Map;
@@ -18,10 +20,11 @@ public class SwitchEvent {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(name = "event_type", nullable = false, columnDefinition = "event_type")
+    @Column(name = "event_type", nullable = false)
     @Enumerated(EnumType.STRING)
     private EventType eventType;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "metadata", columnDefinition = "jsonb")
     private String metadata;   // stored as JSONB; serialised to/from String in the service layer
 

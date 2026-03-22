@@ -41,13 +41,14 @@ public class WillServiceTest {
  
     private IntentExtractionResult validExtraction(String templateType) {
         return new IntentExtractionResult(
-            templateType, 0,
+            templateType, 0, 0, 0, 0, List.of(),
             List.of(
                 new ResolvedBeneficiary("Alice", BENEFICIARY_WALLET_1, 6000, "ALWAYS", 0),
                 new ResolvedBeneficiary("Bob",   BENEFICIARY_WALLET_2, 4000, "ALWAYS", 0)
             ),
             List.of(), List.of(), 0.99
         );
+
     }
  
     @Test
@@ -96,7 +97,8 @@ public class WillServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         IntentExtractionResult badExtraction = new IntentExtractionResult(
-            "UNKNOWN", 0, List.of(), List.of(), List.of("Wallet address missing"), 0.3);
+            "UNKNOWN", 0, 0, 0, 0, List.of(), List.of(), List.of(), List.of("Wallet address missing"), 0.3);
+
         when(intentExtractionService.extract(anyString())).thenReturn(badExtraction);
 
         assertThrows(IllegalArgumentException.class,

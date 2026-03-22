@@ -7,6 +7,8 @@ import type {
   SmartContractRequest,
   SmartContractResponse,
   TokenResponse,
+  WillNotificationRequest,
+  WillNotificationResponse,
   UpdateWillResponse,
   VerifyRequest,
   VaultBalanceResponse,
@@ -67,5 +69,29 @@ export function generateContract(payload: SmartContractRequest): Promise<SmartCo
   return apiFetch<SmartContractResponse>("/api/contracts/generate", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function sendWillNotification(payload: WillNotificationRequest): Promise<WillNotificationResponse> {
+  return fetch("/api/notifications/will", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  }).then(async (response) => {
+    const body = (await response.json()) as Partial<WillNotificationResponse> & { message?: string };
+    if (!response.ok) {
+      return {
+        status: "failed",
+        message: body.message || "Will was saved, but email notification failed.",
+        recipientEmail: body.recipientEmail ?? null,
+      };
+    }
+    return {
+      status: body.status === "sent" || body.status === "skipped" || body.status === "failed" ? body.status : "failed",
+      message: body.message || "Notification request processed.",
+      recipientEmail: body.recipientEmail ?? null,
+    };
   });
 }

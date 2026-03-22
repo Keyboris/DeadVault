@@ -20,6 +20,10 @@ public class SmartContractGeneratorService {
             Ensure the contract compiles and follows basic security practices.
             The contract will be deployed on Base (EVM-equivalent, chain ID 84532 testnet / 8453 mainnet).
 
+            DEADVAULT ARCHITECTURAL PATTERNS:
+            1. STANDARD VAULT: A self-contained contract with an owner, a triggerAuthority, and a list of beneficiaries with basis points (summing to 10,000). The triggerAuthority calls trigger() to distribute funds.
+            2. MULTISIG VAULT: A modular pattern using a MultiSigWallet (for transaction management) and a DeadmanModule (for inheritance). The module tracks owner liveness; if all owners are inactive, it allows anyone to trigger fund redistribution to beneficiaries.
+
             User requirements:
             <user_input>
             %s

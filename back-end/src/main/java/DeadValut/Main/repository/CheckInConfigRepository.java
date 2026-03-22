@@ -17,6 +17,8 @@ public interface CheckInConfigRepository extends JpaRepository<CheckInConfig, UU
 
     Optional<CheckInConfig> findByUserId(UUID userId);
 
+    List<CheckInConfig> findAllByUserIdOrderByCreatedAtDesc(UUID userId);
+
     /** Used by CheckInPollerJob — finds ACTIVE configs whose next_due_at has passed. */
     @Query("SELECT c FROM CheckInConfig c WHERE c.status = 'ACTIVE' AND c.nextDueAt < :now")
     List<CheckInConfig> findMissedCheckIns(@Param("now") Instant now);

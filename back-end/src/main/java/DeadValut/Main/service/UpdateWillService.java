@@ -137,6 +137,20 @@ public class UpdateWillService {
         oldContract.setDeploymentTxHash(deployTxHash);
         oldContract.setVaultType(vaultType);
         oldContract.setStatus("ACTIVE");
+
+        if (newParams instanceof VaultDeploymentParams.Multisig m) {
+            oldContract.setOwners(String.join(",", m.owners()));
+            oldContract.setThreshold(m.threshold());
+            oldContract.setInactivitySeconds(m.inactivitySeconds());
+            oldContract.setGraceSeconds(m.graceSeconds());
+        } else {
+            // Clear multisig fields if switching back to standard vault
+            oldContract.setOwners(null);
+            oldContract.setThreshold(0);
+            oldContract.setInactivitySeconds(0);
+            oldContract.setGraceSeconds(0);
+        }
+
         contractRepo.save(oldContract);
 
         newConfig.setStatus("DEPLOYED");

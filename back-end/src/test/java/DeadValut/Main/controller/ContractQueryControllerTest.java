@@ -32,7 +32,8 @@ public class ContractQueryControllerTest {
         List<ContractSummaryResponse> mockList = List.of(
             new ContractSummaryResponse(
                 UUID.randomUUID(), "0x" + "C".repeat(40), "0x" + "D".repeat(64),
-                "STANDARD", "ACTIVE", Instant.now(), List.of()));
+                "STANDARD", "ACTIVE", Instant.now(), List.of(),
+                "0", "0", null, null, null, null));
         when(contractQueryService.getContracts(userId)).thenReturn(mockList);
  
         List<ContractSummaryResponse> result = controller.getContracts(userId);

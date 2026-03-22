@@ -58,7 +58,14 @@ export type ContractSummaryResponse = {
   status: string;
   deployedAt: string;
   beneficiaries: BeneficiarySummary[];
+  ethBalanceWei: string;
+  ethBalanceEther: string;
+  owners?: string[];
+  threshold?: number;
+  inactivitySeconds?: number;
+  graceSeconds?: number;
 };
+
 
 export type TokenBalance = {
   tokenAddress: string;
@@ -96,6 +103,22 @@ export type SmartContractRequest = {
 export type SmartContractResponse = {
   model: string;
   contract: string;
+};
+
+export type WillNotificationRequest = {
+  walletAddress: string | null;
+  fallbackEmail?: string | null;
+  action: "created" | "updated";
+  templateType: string;
+  contractAddress: string;
+  deploymentTxHash: string;
+  beneficiariesCount: number;
+};
+
+export type WillNotificationResponse = {
+  status: "sent" | "skipped" | "failed";
+  message: string;
+  recipientEmail: string | null;
 };
 
 export type ApiErrorPayload = {

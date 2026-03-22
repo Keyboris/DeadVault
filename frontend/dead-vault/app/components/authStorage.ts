@@ -10,7 +10,15 @@ export type VaultContract = {
   content: string;
   createdAt: string;
   updatedAt: string;
+  vaultType?: string;
+  contractAddress?: string;
+  owners?: string[];
+  threshold?: number;
+  inactivitySeconds?: number;
+  graceSeconds?: number;
+  ethBalanceEther?: string;
 };
+
 
 export type StoredProfile = {
   authWalletAddress: string;
@@ -30,3 +38,20 @@ export type StoredProfile = {
 
 export const AUTH_PROFILE_STORAGE_KEY = "deadvault.auth.profile";
 export const AUTH_SESSION_STORAGE_KEY = "deadvault.auth.session";
+
+export function readStoredProfile(): StoredProfile | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = localStorage.getItem(AUTH_PROFILE_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw) as StoredProfile;
+  } catch {
+    return null;
+  }
+}

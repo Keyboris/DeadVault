@@ -4,9 +4,11 @@ package DeadValut.Main.route;
 import DeadValut.Main.controller.CheckInController;
 import DeadValut.Main.model.CheckInResponse;
 import DeadValut.Main.model.CheckInStatusResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -22,11 +24,17 @@ public class CheckInRoute {
 
     @PostMapping
     public ResponseEntity<CheckInResponse> checkIn(@AuthenticationPrincipal UUID userId) {
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
         return ResponseEntity.ok(checkInController.checkIn(userId));
     }
 
     @GetMapping("/status")
     public ResponseEntity<CheckInStatusResponse> status(@AuthenticationPrincipal UUID userId) {
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
         return ResponseEntity.ok(checkInController.status(userId));
     }
 }

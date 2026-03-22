@@ -22,5 +22,11 @@ public record ContractSummaryResponse(
         String                  vaultType,
         String                  status,
         Instant                 deployedAt,
-        List<BeneficiarySummary> beneficiaries
+        List<BeneficiarySummary> beneficiaries,
+        String                  ethBalanceWei,
+        String                  ethBalanceEther,
+        List<String>            owners,             // null if not multisig
+        Integer                 threshold,          // null if not multisig
+        Integer                 inactivitySeconds,  // null if not multisig
+        Integer                 graceSeconds        // null if not multisig
 ) {}

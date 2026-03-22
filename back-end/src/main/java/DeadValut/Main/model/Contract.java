@@ -45,6 +45,18 @@ public class Contract {
     @Column(name = "triggered_at")
     private Instant triggeredAt;
 
+    @Column(name = "owners", columnDefinition = "TEXT")
+    private String owners;
+
+    @Column(name = "threshold")
+    private Integer threshold;
+
+    @Column(name = "inactivity_seconds")
+    private Integer inactivitySeconds;
+
+    @Column(name = "grace_seconds")
+    private Integer graceSeconds;
+
     public Contract() {}
 
     public UUID getId()                           { return id; }
@@ -63,4 +75,13 @@ public class Contract {
     public Instant getDeployedAt()                { return deployedAt; }
     public Instant getTriggeredAt()               { return triggeredAt; }
     public void setTriggeredAt(Instant t)         { this.triggeredAt = t; }
+
+    public String getOwners()                     { return owners; }
+    public void setOwners(String o)               { this.owners = o; }
+    public Integer getThreshold()                 { return threshold; }
+    public void setThreshold(Integer t)           { this.threshold = t; }
+    public Integer getInactivitySeconds()         { return inactivitySeconds; }
+    public void setInactivitySeconds(Integer s)   { this.inactivitySeconds = s; }
+    public Integer getGraceSeconds()              { return graceSeconds; }
+    public void setGraceSeconds(Integer s)        { this.graceSeconds = s; }
 }

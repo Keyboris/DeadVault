@@ -33,7 +33,11 @@ public class ContractDeploymentService {
     @Value("${dms.blockchain.factory-address}")
     private String factoryAddress;
 
+    @Value("${dms.blockchain.multisig-factory-address}")
+    private String multisigFactoryAddress;
+
     @Value("${dms.blockchain.chain-id}")
+
     private long chainId;
 
     @Value("${dms.blockchain.gas-limit}")
@@ -78,7 +82,11 @@ public class ContractDeploymentService {
         Web3j web3j = Web3j.build(new HttpService(rpcUrl));
         Credentials creds = Credentials.create(privateKey);
 
-        validateDeploymentContext(web3j);
+        String targetFactory = params instanceof VaultDeploymentParams.Multisig
+            ? multisigFactoryAddress : factoryAddress;
+
+        validateDeploymentContext(web3j, targetFactory);
+
 
         String encodedData;
         String vaultTypeName;
@@ -101,15 +109,25 @@ public class ContractDeploymentService {
                                                         c.mustSurviveOwner());
             vaultTypeName = "CONDITIONAL_SURVIVAL";
 
+        } else if (params instanceof VaultDeploymentParams.Multisig m) {
+            encodedData = encodeCreateMultisigVault(
+                m.owners(), m.threshold(), m.inactivitySeconds(), m.graceSeconds(),
+                m.beneficiaryWallets(), m.basisPoints()
+            );
+            vaultTypeName = "MULTISIG_DEADMAN";
+
         } else {
             throw new IllegalArgumentException("Unknown VaultDeploymentParams type: " + params.getClass());
         }
 
-        TransactionReceipt receipt = sendTransaction(web3j, creds, factoryAddress, encodedData);
+
+        TransactionReceipt receipt = sendTransaction(web3j, creds, targetFactory, encodedData);
+
         return new DeployResult(extractVaultAddress(receipt), receipt.getTransactionHash(), vaultTypeName);
     }
 
-    private void validateDeploymentContext(Web3j web3j) throws Exception {
+    private void validateDeploymentContext(Web3j web3j, String targetFactory) throws Exception {
+
         EthChainId chain = web3j.ethChainId().send();
         long rpcChainId = chain.getChainId().longValue();
         if (rpcChainId != chainId) {
@@ -119,15 +137,16 @@ public class ContractDeploymentService {
             );
         }
 
-        EthGetCode codeResponse = web3j.ethGetCode(factoryAddress, DefaultBlockParameterName.LATEST).send();
+        EthGetCode codeResponse = web3j.ethGetCode(targetFactory, DefaultBlockParameterName.LATEST).send();
         String code = codeResponse.getCode();
         if (code == null || code.equals("0x") || code.equals("0x0")) {
             throw new IllegalStateException(
-                "No contract code found at FACTORY_CONTRACT_ADDRESS=" + factoryAddress +
-                    " on rpc=" + rpcUrl + ". Deploy DMSFactory to this network and update env."
+                "No contract code found at factory address=" + targetFactory +
+                    " on rpc=" + rpcUrl + ". Deploy the correct factory to this network and update env."
             );
         }
     }
+
 
     // ── ABI encoding helpers ──────────────────────────────────────────────────────────────────────
 
@@ -174,6 +193,26 @@ public class ContractDeploymentService {
         );
         return FunctionEncoder.encode(fn);
     }
+
+    private String encodeCreateMultisigVault(
+            List<String> owners, int threshold, int inactivity, int grace,
+            List<String> beneficiaries, List<Integer> bps
+    ) {
+        Function fn = new Function(
+            "createWalletWithDeadman",
+            List.of(
+                new DynamicArray<>(Address.class, toAddressList(owners)),
+                new Uint256(BigInteger.valueOf(threshold)),
+                new Uint256(BigInteger.valueOf(inactivity)),
+                new Uint256(BigInteger.valueOf(grace)),
+                new DynamicArray<>(Address.class, toAddressList(beneficiaries)),
+                new DynamicArray<>(Uint16.class, toBpList(bps))
+            ),
+            List.of(new TypeReference<Address>() {}, new TypeReference<Address>() {})
+        );
+        return FunctionEncoder.encode(fn);
+    }
+
 
     // ── Shared tx sender + helpers ────────────────────────────────────────────────────────────────
 
